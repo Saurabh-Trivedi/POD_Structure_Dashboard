@@ -146,6 +146,10 @@
       display: block;
     }
 
+    .page .card + .card {
+      margin-top: var(--spacing-md);
+    }
+
     .card {
       background: var(--surface-color);
       border: 1px solid var(--border-color);
@@ -1455,21 +1459,6 @@
         renderTeamSizeChip({ label: "Team Size", detail: "SDM + Developer + PMO + QA + Leaders", value: page1.teamSize })
       );
 
-      const tierSection = document.createElement("div");
-      tierSection.className = "card";
-      const tierTitle = document.createElement("h3");
-      tierTitle.className = "section-title";
-      tierTitle.textContent = "POD Tier Distribution";
-      const tierGrid = document.createElement("div");
-      tierGrid.className = "grid kpi";
-      Object.entries(page1.tierCounts).forEach(([tier, count]) => {
-        tierGrid.appendChild(renderChip({ label: tier.toUpperCase(), value: count, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }));
-      });
-      if (!Object.keys(page1.tierCounts).length) {
-        tierGrid.appendChild(renderEmptyState("No tier data available."));
-      }
-      tierSection.append(tierTitle, tierGrid);
-
       const leadershipChipsSection = document.createElement("div");
       leadershipChipsSection.className = "card";
       const leadershipTitle = document.createElement("h3");
@@ -1571,7 +1560,7 @@
       ownershipSection.append(ownershipTitle, ownershipControls, ownershipGrid, podList);
 
       card.append(kpiTitle, kpiRowOne, kpiRowTwo);
-      container.append(card, tierSection, leadershipChipsSection, podBarSection, ownershipSection);
+      container.append(card, leadershipChipsSection, podBarSection, ownershipSection);
     }
 
     function renderPage2(state) {
