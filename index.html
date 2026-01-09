@@ -652,14 +652,9 @@
       const columnMap = mapColumns(headers);
       const podKeySet = new Set();
       const podMetaByKey = {};
-      const podNumberSet = new Set();
-      const podMetaByNumber = {};
-      const podMetaBySizeKey = {};
       const tierCounts = {};
       const leaderCounts = {};
       const podMembersCount = {};
-      const podMembersByNumber = {};
-      const podMembersBySizeKey = {};
       let onRoll = 0;
       let offRoll = 0;
 
@@ -690,28 +685,6 @@
             podTier: getValue(row, columnMap.podTier) || "--"
           };
         }
-        if (podNumber) {
-          podNumberSet.add(podNumber);
-          podMembersByNumber[podNumber] = (podMembersByNumber[podNumber] || 0) + 1;
-          podMetaByNumber[podNumber] = {
-            podNumber,
-            podName: podName || "--",
-            podTier: getValue(row, columnMap.podTier) || "--"
-          };
-        }
-
-        const sizeKey = podNumber || podName || "(unassigned)";
-        if (sizeKey) {
-          podMembersBySizeKey[sizeKey] = (podMembersBySizeKey[sizeKey] || 0) + 1;
-          if (!podMetaBySizeKey[sizeKey]) {
-            podMetaBySizeKey[sizeKey] = {
-              podNumber: podNumber || "--",
-              podName: podName || "--",
-              podTier: getValue(row, columnMap.podTier) || "--"
-            };
-          }
-        }
-
         const tier = normalizeValue(getValue(row, columnMap.podTier));
         if (tier) {
           tierCounts[tier] = (tierCounts[tier] || 0) + 1;
@@ -750,24 +723,30 @@
         }
       });
 
-      const sizeSource = Object.keys(podMembersByNumber).length ? podMembersByNumber : podMembersBySizeKey;
-      const podSizeCounts = Object.values(sizeSource).reduce(
-        (acc, size) => {
-          if (size === 12) acc.twelve += 1;
-          if (size === 8) acc.eight += 1;
-          return acc;
-        },
-        { twelve: 0, eight: 0 }
-      );
+      const podTierSets = {
+        twelve: new Set(),
+        eight: new Set(),
+        tech: new Set()
+      };
+      rawData.forEach((row) => {
+        const podName = getValue(row, columnMap.podName) || "(unassigned)";
+        const tierValue = normalizeValue(getValue(row, columnMap.podTier));
+        if (tierValue.includes("12")) {
+          podTierSets.twelve.add(podName);
+        }
+        if (tierValue.includes("8")) {
+          podTierSets.eight.add(podName);
+        }
+        if (tierValue.includes("tech")) {
+          podTierSets.tech.add(podName);
+        }
+      });
 
-      const techPodSource = Object.keys(podMembersByNumber).length ? podMetaByNumber : podMetaBySizeKey;
-      const techPodCount = Object.keys(techPodSource).length
-        ? Object.values(techPodSource).filter((podMeta) => {
-            const podTier = normalizeValue(podMeta.podTier || "");
-            const podName = (podMeta.podName || "").toLowerCase();
-            return podName.includes("tech") || podTier.includes("tech");
-          }).length
-        : 0;
+      const podSizeCounts = {
+        twelve: podTierSets.twelve.size,
+        eight: podTierSets.eight.size
+      };
+      const techPodCount = podTierSets.tech.size;
 
       const ownershipRole = page1Ui.ownershipRole || "All";
       const ownershipLeaders = ownershipMap.roles[ownershipRole] || {};
