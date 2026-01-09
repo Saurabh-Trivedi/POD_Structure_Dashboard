@@ -786,6 +786,7 @@
         leadershipRoleCounts: Object.fromEntries(
           Object.entries(leadershipRoleCounts).map(([key, set]) => [key, set.size])
         ),
+        leadershipTotal,
         podSizeBars: [
           { label: "12 member POD", value: podSizeCounts.twelve },
           { label: "8 member POD", value: podSizeCounts.eight },
@@ -1164,7 +1165,7 @@
         );
       });
       leadershipGrid.appendChild(
-        renderChip({ label: "All Members", value: page1.totalSeats, variant: "primary", size: "md", shape: "rounded", layout: "horizontal" })
+        renderChip({ label: "All Leaders", value: page1.leadershipTotal, variant: "primary", size: "md", shape: "rounded", layout: "horizontal" })
       );
       leadershipChipsSection.append(leadershipTitle, leadershipGrid);
 
