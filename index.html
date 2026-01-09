@@ -131,6 +131,9 @@
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     }
 
+    .grid.summary-row + .grid.summary-row {
+      margin-top: var(--spacing-md);
+    }
     .chip {
       display: inline-flex;
       align-items: center;
@@ -1057,7 +1060,7 @@
         renderSeatChip({ label: "Developer Seats", bucket: page1.roleBuckets.developer, variant: "info" }),
         renderSeatChip({ label: "PMO Seats", bucket: page1.roleBuckets.pmo, variant: "info" }),
         renderSeatChip({ label: "QA Seats", bucket: page1.roleBuckets.qa, variant: "info" }),
-        renderChip({ label: "Team Size", value: page1.teamSize, variant: "primary", size: "md", shape: "rounded", layout: "vertical" })
+        renderChip({ label: "SDM + Developer + PMO + QA + Leaders", value: page1.teamSize, variant: "primary", size: "md", shape: "rounded", layout: "vertical" })
       );
 
       const tierSection = document.createElement("div");
