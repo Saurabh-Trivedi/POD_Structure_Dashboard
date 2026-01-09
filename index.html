@@ -1743,6 +1743,13 @@
       heading.textContent = "Duplicate Resource Names";
       section.appendChild(heading);
 
+      const formatName = (name) =>
+        String(name || "")
+          .trim()
+          .split(/\s+/)
+          .map((part) => (part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ""))
+          .join(" ");
+
       const list = document.createElement("div");
       list.className = "governance-list";
 
@@ -1759,7 +1766,7 @@
         duplicates.confirmed.forEach((duplicate) => {
           const li = document.createElement("li");
           const entries = duplicate.entries.map((entry) => `${entry.pod} (${entry.role})`).join(", ");
-          li.textContent = `${duplicate.name}: ${entries}`;
+          li.textContent = `${formatName(duplicate.name)}: ${entries}`;
           confirmedList.appendChild(li);
         });
       }
@@ -1778,7 +1785,7 @@
         duplicates.possible.forEach((duplicate) => {
           const li = document.createElement("li");
           const pods = duplicate.pods.length ? ` — Pods: ${duplicate.pods.join(", ")}` : "";
-          li.textContent = `${duplicate.nameVariants.join(" / ")}${pods}`;
+          li.textContent = `${duplicate.nameVariants.map(formatName).join(" / ")}${pods}`;
           possibleList.appendChild(li);
         });
       }
