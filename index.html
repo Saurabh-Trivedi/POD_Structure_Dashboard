@@ -128,7 +128,7 @@
     }
 
     .grid.summary-row {
-      grid-template-columns: repeat(4, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     }
 
     .chip {
@@ -742,6 +742,9 @@
         }
       });
 
+      const leadershipTotal = Object.values(leadershipRoleCounts).reduce((sum, set) => sum + set.size, 0);
+      const teamSize = roleBuckets.sdm.total + roleBuckets.developer.total + roleBuckets.pmo.total + roleBuckets.qa.total + leadershipTotal;
+
       const podSizeCounts = {
         twelve: podTierSets.twelve.size,
         eight: podTierSets.eight.size
@@ -765,6 +768,7 @@
         tierCounts,
         leaderCounts,
         roleBuckets,
+        teamSize,
         leadershipRoleCounts: Object.fromEntries(
           Object.entries(leadershipRoleCounts).map(([key, set]) => [key, set.size])
         ),
@@ -1052,7 +1056,8 @@
         renderSeatChip({ label: "SDM Seats", bucket: page1.roleBuckets.sdm, variant: "info" }),
         renderSeatChip({ label: "Developer Seats", bucket: page1.roleBuckets.developer, variant: "info" }),
         renderSeatChip({ label: "PMO Seats", bucket: page1.roleBuckets.pmo, variant: "info" }),
-        renderSeatChip({ label: "QA Seats", bucket: page1.roleBuckets.qa, variant: "info" })
+        renderSeatChip({ label: "QA Seats", bucket: page1.roleBuckets.qa, variant: "info" }),
+        renderChip({ label: "Team Size", value: page1.teamSize, variant: "primary", size: "md", shape: "rounded", layout: "vertical" })
       );
 
       const tierSection = document.createElement("div");
