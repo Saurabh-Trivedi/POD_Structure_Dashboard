@@ -948,8 +948,8 @@
         return match ? match.raw : "";
       };
       return {
-        podNumber: lookup(["pod number", "pod id", "pod #"]),
-        podName: lookup(["pod name", "pod"]),
+        podNumber: lookup(["# pod", "pod #", "pod number", "pod no", "pod id"]),
+        podName: lookup(["pod name"]),
         podTier: lookup(["tier"]),
         leader: lookup(["leader", "owner", "pod lead"]),
         resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
