@@ -1183,7 +1183,7 @@
 
       const resourceGroups = groupBy(rawData, (row) => normalizeValue(getValue(row, columnMap.resourceName)) || "(unnamed)");
       Object.entries(resourceGroups).forEach(([resourceName, rows]) => {
-        if (!resourceName || resourceName === "(unnamed)") return;
+        if (!resourceName || resourceName === "(unnamed)" || isPlaceholderName(resourceName)) return;
         const uniquePods = new Map();
         rows.forEach((row) => {
           const pod = getPodKey(row) || "--";
@@ -1215,7 +1215,7 @@
       const normalizedNames = {};
       rawData.forEach((row) => {
         const rawName = getValue(row, columnMap.resourceName);
-        if (!rawName) return;
+        if (!rawName || isPlaceholderName(rawName)) return;
         const normalized = rawName.toLowerCase().replace(/[^a-z0-9]/g, "");
         if (!normalized) return;
         normalizedNames[normalized] = normalizedNames[normalized] || new Set();
@@ -1335,14 +1335,18 @@
       return String(value || "").trim().toLowerCase();
     }
 
+    function isPlaceholderName(value) {
+      const normalized = normalizeValue(value);
+      return normalized.includes("tbh") || normalized.includes("tbd") || normalized.includes("to be hired");
+    }
+
     function splitNames(value) {
       return String(value || "")
         .split(/[,/;]+/)
         .map((name) => name.trim())
         .filter((name) => {
           if (!name) return false;
-          const normalized = normalizeValue(name);
-          return !normalized.includes("tbh") && !normalized.includes("tbd") && !normalized.includes("to be hired");
+          return !isPlaceholderName(name);
         });
     }
 
