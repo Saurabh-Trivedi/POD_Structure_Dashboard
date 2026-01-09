@@ -26,6 +26,7 @@
       --font-xl: 24px;
       --border-color: #334155;
       --shadow: 0 8px 24px rgba(15, 23, 42, 0.45);
+      --bar-height: 14px;
     }
 
     * {
@@ -242,6 +243,76 @@
       padding-left: 18px;
     }
 
+    .bar-group {
+      display: grid;
+      gap: var(--spacing-sm);
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 160px 1fr 60px;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: var(--font-sm);
+    }
+
+    .bar-track {
+      background: var(--surface-color);
+      border-radius: 999px;
+      height: var(--bar-height);
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, rgba(37, 99, 235, 0.85), rgba(14, 165, 233, 0.85));
+      width: 0%;
+    }
+
+    .bar-value {
+      text-align: right;
+      color: var(--muted-text);
+    }
+
+    .ownership-controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .ownership-controls label {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      font-size: var(--font-sm);
+    }
+
+    .ownership-controls select {
+      background: var(--surface-alt);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: var(--spacing-xs);
+      border-radius: 8px;
+    }
+
+    .pod-list {
+      display: grid;
+      gap: var(--spacing-xs);
+      margin-top: var(--spacing-sm);
+      font-size: var(--font-sm);
+    }
+
+    .pod-list-item {
+      display: grid;
+      grid-template-columns: 90px 1fr 120px;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
     .empty-state {
       padding: var(--spacing-lg);
       text-align: center;
@@ -277,6 +348,10 @@
     // ============================
     const DEFAULT_UI_STATE = {
       activePage: "page1",
+      page1: {
+        ownershipRole: "All",
+        ownershipLeader: ""
+      },
       page2: {
         searchTerm: "",
         sortKey: "",
@@ -299,6 +374,14 @@
 
     const CONFIG = {
       leadershipRoles: ["pod lead", "product owner", "tech lead", "engineering lead"],
+      leadershipRoleFilters: {
+        "PMO Senior Lead": ["pmo senior lead"],
+        "PMO Lead": ["pmo lead"],
+        "Principal Architect": ["principal architect"],
+        "Technical Architect": ["technical architect"],
+        "QA Leads": ["qa lead", "quality lead"]
+      },
+      leadershipRoleOptions: ["All", "PMO Senior Lead", "Principal Architect", "Technical Architect", "PMO Lead"],
       tierRoleExpectations: {
         "tier 1": ["pod lead", "product owner", "tech lead"],
         "tier 2": ["pod lead", "tech lead"],
@@ -527,24 +610,40 @@
 
     function computeDerivedState(headers, rawData, ui) {
       return {
-        page1: derivePage1(headers, rawData),
+        page1: derivePage1(headers, rawData, ui.page1),
         page2: derivePage2(headers, rawData, ui.page2),
         page3: derivePage3(headers, rawData)
       };
     }
 
-    function derivePage1(headers, rawData) {
+    function derivePage1(headers, rawData, page1Ui) {
       const columnMap = mapColumns(headers);
       const podSet = new Set();
       const tierCounts = {};
       const leaderCounts = {};
+      const podMembersCount = {};
       let onRoll = 0;
       let offRoll = 0;
+
+      const roleBuckets = {
+        sdm: { label: "SDM", total: 0, on: 0, off: 0 },
+        developer: { label: "Developer", total: 0, on: 0, off: 0 },
+        pmo: { label: "PMO", total: 0, on: 0, off: 0 },
+        qa: { label: "QA", total: 0, on: 0, off: 0 }
+      };
+
+      const leadershipRoleCounts = {};
+      Object.keys(CONFIG.leadershipRoleFilters).forEach((role) => {
+        leadershipRoleCounts[role] = new Set();
+      });
+
+      const ownershipMap = buildOwnershipMap(rawData, columnMap);
 
       rawData.forEach((row) => {
         const podName = getValue(row, columnMap.podName);
         if (podName) {
           podSet.add(podName);
+          podMembersCount[podName] = (podMembersCount[podName] || 0) + 1;
         }
 
         const tier = normalizeValue(getValue(row, columnMap.podTier));
@@ -563,7 +662,52 @@
         } else if (roll.includes("off")) {
           offRoll += 1;
         }
+
+        const roleValue = normalizeValue(getValue(row, columnMap.role));
+        const roleBucketKey = getRoleBucket(roleValue);
+        if (roleBucketKey && roleBuckets[roleBucketKey]) {
+          roleBuckets[roleBucketKey].total += 1;
+          if (roll.includes("on")) {
+            roleBuckets[roleBucketKey].on += 1;
+          } else if (roll.includes("off")) {
+            roleBuckets[roleBucketKey].off += 1;
+          }
+        }
+
+        const resourceName = getValue(row, columnMap.resourceName);
+        if (resourceName) {
+          Object.entries(CONFIG.leadershipRoleFilters).forEach(([roleLabel, patterns]) => {
+            if (patterns.some((pattern) => roleValue.includes(pattern))) {
+              leadershipRoleCounts[roleLabel].add(resourceName);
+            }
+          });
+        }
       });
+
+      const podSizeCounts = Object.values(podMembersCount).reduce(
+        (acc, size) => {
+          if (size === 12) acc.twelve += 1;
+          if (size === 8) acc.eight += 1;
+          return acc;
+        },
+        { twelve: 0, eight: 0 }
+      );
+
+      const techPodCount = podSet.size
+        ? Array.from(podSet).filter((podName) => {
+            const podTier = normalizeValue(ownershipMap.podTierByPod[podName] || "");
+            return podName.toLowerCase().includes("tech") || podTier.includes("tech");
+          }).length
+        : 0;
+
+      const ownershipRole = page1Ui.ownershipRole || "All";
+      const ownershipLeaders = ownershipMap.roles[ownershipRole] || {};
+      const leaderOptions = Object.keys(ownershipLeaders).sort();
+      const selectedLeader = leaderOptions.includes(page1Ui.ownershipLeader)
+        ? page1Ui.ownershipLeader
+        : leaderOptions[0] || "";
+      const selectedPods = selectedLeader ? ownershipLeaders[selectedLeader] || [] : [];
+      const ownershipMetrics = buildOwnershipMetrics(selectedPods, podMembersCount);
 
       return {
         totalPods: podSet.size,
@@ -571,7 +715,23 @@
         onRoll,
         offRoll,
         tierCounts,
-        leaderCounts
+        leaderCounts,
+        roleBuckets,
+        leadershipRoleCounts: Object.fromEntries(
+          Object.entries(leadershipRoleCounts).map(([key, set]) => [key, set.size])
+        ),
+        podSizeBars: [
+          { label: "12 member POD", value: podSizeCounts.twelve },
+          { label: "8 member POD", value: podSizeCounts.eight },
+          { label: "Tech POD", value: techPodCount }
+        ],
+        ownership: {
+          roleOptions: CONFIG.leadershipRoleOptions,
+          leaderOptions,
+          selectedRole: ownershipRole,
+          selectedLeader,
+          metrics: ownershipMetrics
+        }
       };
     }
 
@@ -699,10 +859,11 @@
         return header || "";
       };
       return {
+        podNumber: lookup(["pod number", "pod id", "pod #"]),
         podName: lookup(["pod name", "pod"]),
         podTier: lookup(["tier"]),
         leader: lookup(["leader", "lead", "owner"]),
-        resourceName: lookup(["resource", "name"]),
+        resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
         role: lookup(["role", "position", "title"]),
         rollStatus: lookup(["roll", "status", "on/off"])
       };
@@ -724,6 +885,79 @@
         acc[key].push(row);
         return acc;
       }, {});
+    }
+
+    function getRoleBucket(roleValue) {
+      if (!roleValue) return "";
+      if (roleValue.includes("sdm") || roleValue.includes("service delivery")) return "sdm";
+      if (roleValue.includes("pmo")) return "pmo";
+      if (roleValue.includes("qa") || roleValue.includes("quality")) return "qa";
+      if (roleValue.includes("developer") || roleValue.includes("engineer") || roleValue.includes("dev")) return "developer";
+      return "";
+    }
+
+    function buildOwnershipMap(rawData, columnMap) {
+      const roles = { All: {} };
+      CONFIG.leadershipRoleOptions.forEach((role) => {
+        if (role !== "All") {
+          roles[role] = {};
+        }
+      });
+      const podTierByPod = {};
+
+      rawData.forEach((row) => {
+        const podName = getValue(row, columnMap.podName) || "(unassigned)";
+        const podTier = getValue(row, columnMap.podTier) || "";
+        podTierByPod[podName] = podTier;
+
+        const resourceName = getValue(row, columnMap.resourceName);
+        if (!resourceName) return;
+
+        const roleValue = normalizeValue(getValue(row, columnMap.role));
+        addOwnershipRecord(roles.All, resourceName, row, columnMap);
+
+        Object.entries(CONFIG.leadershipRoleFilters).forEach(([roleLabel, patterns]) => {
+          if (!roles[roleLabel]) return;
+          if (patterns.some((pattern) => roleValue.includes(pattern))) {
+            addOwnershipRecord(roles[roleLabel], resourceName, row, columnMap);
+          }
+        });
+      });
+
+      return { roles, podTierByPod };
+    }
+
+    function addOwnershipRecord(targetMap, leaderName, row, columnMap) {
+      if (!targetMap[leaderName]) {
+        targetMap[leaderName] = [];
+      }
+      const podName = getValue(row, columnMap.podName) || "(unassigned)";
+      const podNumber = getValue(row, columnMap.podNumber) || "--";
+      const podTier = getValue(row, columnMap.podTier) || "--";
+      const existing = targetMap[leaderName].find((pod) => pod.podName === podName);
+      if (!existing) {
+        targetMap[leaderName].push({
+          podNumber,
+          podName,
+          podTier
+        });
+      }
+    }
+
+    function buildOwnershipMetrics(pods, podMembersCount) {
+      const podList = pods.map((pod) => ({
+        ...pod,
+        size: podMembersCount[pod.podName] || 0
+      }));
+      const podsOwned = podList.length;
+      const pods12 = podList.filter((pod) => pod.size === 12).length;
+      const pods8 = podList.filter((pod) => pod.size === 8).length;
+      return {
+        podsOwned,
+        pods12,
+        pods8,
+        podList
+      };
     }
 
     // ============================
@@ -754,13 +988,29 @@
       const card = document.createElement("div");
       card.className = "card";
 
+      const kpiTitle = document.createElement("h3");
+      kpiTitle.className = "section-title";
+      kpiTitle.textContent = "Summary KPIs";
+
       const kpiGrid = document.createElement("div");
       kpiGrid.className = "grid kpi";
       kpiGrid.append(
         renderChip({ label: "Total PODs", value: page1.totalPods, variant: "primary", size: "lg", shape: "rounded", layout: "vertical" }),
         renderChip({ label: "Total Seats", value: page1.totalSeats, variant: "info", size: "lg", shape: "rounded", layout: "vertical" }),
-        renderChip({ label: "On-Roll", value: page1.onRoll, variant: "primary", size: "md", shape: "pill", layout: "vertical" }),
-        renderChip({ label: "Off-Roll", value: page1.offRoll, variant: "warning", size: "md", shape: "pill", layout: "vertical" })
+        renderChip({ label: "On-Roll Seats", value: page1.onRoll, variant: "primary", size: "md", shape: "pill", layout: "vertical" }),
+        renderChip({ label: "Off-Roll Seats", value: page1.offRoll, variant: "warning", size: "md", shape: "pill", layout: "vertical" }),
+        renderChip({ label: "SDM Seats", value: page1.roleBuckets.sdm.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
+        renderChip({ label: "SDM On Roll", value: page1.roleBuckets.sdm.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "SDM Off Roll", value: page1.roleBuckets.sdm.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "Developer Seats", value: page1.roleBuckets.developer.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
+        renderChip({ label: "Developer On Roll", value: page1.roleBuckets.developer.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "Developer Off Roll", value: page1.roleBuckets.developer.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "PMO Seats", value: page1.roleBuckets.pmo.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
+        renderChip({ label: "PMO On Roll", value: page1.roleBuckets.pmo.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "PMO Off Roll", value: page1.roleBuckets.pmo.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "QA Seats", value: page1.roleBuckets.qa.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
+        renderChip({ label: "QA On Roll", value: page1.roleBuckets.qa.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
+        renderChip({ label: "QA Off Roll", value: page1.roleBuckets.qa.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" })
       );
 
       const tierSection = document.createElement("div");
@@ -778,25 +1028,104 @@
       }
       tierSection.append(tierTitle, tierGrid);
 
-      const leaderSection = document.createElement("div");
-      leaderSection.className = "card";
-      const leaderTitle = document.createElement("h3");
-      leaderTitle.className = "section-title";
-      leaderTitle.textContent = "Leadership Ownership";
-      const leaderGrid = document.createElement("div");
-      leaderGrid.className = "grid kpi";
-      Object.entries(page1.leaderCounts)
-        .sort((a, b) => b[1] - a[1])
-        .forEach(([leader, count]) => {
-          leaderGrid.appendChild(renderChip({ label: leader, value: count, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }));
-        });
-      if (!Object.keys(page1.leaderCounts).length) {
-        leaderGrid.appendChild(renderEmptyState("No leadership assignments detected."));
-      }
-      leaderSection.append(leaderTitle, leaderGrid);
+      const leadershipChipsSection = document.createElement("div");
+      leadershipChipsSection.className = "card";
+      const leadershipTitle = document.createElement("h3");
+      leadershipTitle.className = "section-title";
+      leadershipTitle.textContent = "Leadership Chips";
+      const leadershipGrid = document.createElement("div");
+      leadershipGrid.className = "grid kpi";
+      const leadershipOrder = ["PMO Senior Lead", "PMO Lead", "Principal Architect", "Technical Architect", "QA Leads"];
+      leadershipOrder.forEach((roleLabel) => {
+        leadershipGrid.appendChild(
+          renderChip({
+            label: roleLabel,
+            value: page1.leadershipRoleCounts[roleLabel] || 0,
+            variant: "info",
+            size: "md",
+            shape: "pill",
+            layout: "horizontal"
+          })
+        );
+      });
+      leadershipGrid.appendChild(
+        renderChip({ label: "All Members", value: page1.totalSeats, variant: "primary", size: "md", shape: "rounded", layout: "horizontal" })
+      );
+      leadershipChipsSection.append(leadershipTitle, leadershipGrid);
 
-      card.appendChild(kpiGrid);
-      container.append(card, tierSection, leaderSection);
+      const podBarSection = document.createElement("div");
+      podBarSection.className = "card";
+      const podBarTitle = document.createElement("h3");
+      podBarTitle.className = "section-title";
+      podBarTitle.textContent = "POD Size Comparison";
+      const barGroup = document.createElement("div");
+      barGroup.className = "bar-group";
+      const maxValue = Math.max(...page1.podSizeBars.map((bar) => bar.value), 1);
+      page1.podSizeBars.forEach((bar) => {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        const label = document.createElement("div");
+        label.textContent = bar.label;
+        const track = document.createElement("div");
+        track.className = "bar-track";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${(bar.value / maxValue) * 100}%`;
+        track.appendChild(fill);
+        const value = document.createElement("div");
+        value.className = "bar-value";
+        value.textContent = bar.value;
+        row.append(label, track, value);
+        barGroup.appendChild(row);
+      });
+      podBarSection.append(podBarTitle, barGroup);
+
+      const ownershipSection = document.createElement("div");
+      ownershipSection.className = "card";
+      const ownershipTitle = document.createElement("h3");
+      ownershipTitle.className = "section-title";
+      ownershipTitle.textContent = "Leadership Ownership";
+      const ownershipControls = document.createElement("div");
+      ownershipControls.className = "ownership-controls";
+      ownershipControls.appendChild(
+        renderSelectControl(
+          "Role",
+          page1.ownership.roleOptions,
+          page1.ownership.selectedRole,
+          (value) => updatePage1Ui({ ownershipRole: value, ownershipLeader: "" })
+        )
+      );
+      ownershipControls.appendChild(
+        renderSelectControl(
+          "Leader",
+          page1.ownership.leaderOptions.length ? page1.ownership.leaderOptions : [""],
+          page1.ownership.selectedLeader,
+          (value) => updatePage1Ui({ ownershipLeader: value })
+        )
+      );
+      const ownershipGrid = document.createElement("div");
+      ownershipGrid.className = "grid kpi";
+      ownershipGrid.append(
+        renderChip({ label: "PODs Owned", value: page1.ownership.metrics.podsOwned, variant: "primary", size: "md", shape: "rounded", layout: "vertical" }),
+        renderChip({ label: "12 Member PODs", value: page1.ownership.metrics.pods12, variant: "info", size: "md", shape: "rounded", layout: "vertical" }),
+        renderChip({ label: "8 Member PODs", value: page1.ownership.metrics.pods8, variant: "info", size: "md", shape: "rounded", layout: "vertical" })
+      );
+      const podList = document.createElement("div");
+      podList.className = "pod-list";
+      if (!page1.ownership.metrics.podList.length) {
+        podList.appendChild(renderEmptyState("Select a leader to view POD ownership details."));
+      } else {
+        page1.ownership.metrics.podList.forEach((pod) => {
+          const item = document.createElement("div");
+          item.className = "pod-list-item";
+          item.innerHTML = `<div>${pod.podNumber}</div><div>${pod.podName}</div><div>${pod.podTier}</div>`;
+          podList.appendChild(item);
+        });
+      }
+      ownershipSection.append(ownershipTitle, ownershipControls, ownershipGrid, podList);
+
+      card.append(kpiTitle, kpiGrid);
+      container.append(card, tierSection, leadershipChipsSection, podBarSection, ownershipSection);
     }
 
     function renderPage2(state) {
@@ -988,6 +1317,23 @@
         renderApp(APP_STATE);
       });
     });
+
+    function updatePage1Ui(partial) {
+      const updatedPage1 = { ...APP_STATE.ui.page1, ...partial };
+      const derivedPage1 = derivePage1(APP_STATE.headers, APP_STATE.rawData, updatedPage1);
+      APP_STATE = {
+        ...APP_STATE,
+        ui: {
+          ...APP_STATE.ui,
+          page1: updatedPage1
+        },
+        derived: {
+          ...APP_STATE.derived,
+          page1: derivedPage1
+        }
+      };
+      renderApp(APP_STATE);
+    }
 
     function updatePage2Ui(partial) {
       const updatedPage2 = { ...APP_STATE.ui.page2, ...partial };
