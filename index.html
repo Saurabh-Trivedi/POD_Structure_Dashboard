@@ -391,7 +391,7 @@
     const DEFAULT_UI_STATE = {
       activePage: "page1",
       page1: {
-        ownershipRole: "All",
+        ownershipRole: "PMO Senior Lead",
         ownershipLeader: ""
       },
       page2: {
@@ -772,7 +772,8 @@
       };
       const techPodCount = podTierSets.tech.size;
 
-      const ownershipRole = page1Ui.ownershipRole || "All";
+      const ownershipOptions = CONFIG.leadershipRoleOptions.filter((role) => role !== "All");
+      const ownershipRole = ownershipOptions.includes(page1Ui.ownershipRole) ? page1Ui.ownershipRole : ownershipOptions[0] || "";
       const ownershipLeaders = ownershipMap.roles[ownershipRole] || {};
       const leaderOptions = Object.keys(ownershipLeaders).sort();
       const selectedLeader = leaderOptions.includes(page1Ui.ownershipLeader)
@@ -800,7 +801,7 @@
           { label: "Tech POD", value: techPodCount }
         ],
         ownership: {
-          roleOptions: CONFIG.leadershipRoleOptions,
+          roleOptions: ownershipOptions,
           leaderOptions,
           selectedRole: ownershipRole,
           selectedLeader,
