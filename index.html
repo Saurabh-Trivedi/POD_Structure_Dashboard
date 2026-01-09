@@ -348,6 +348,13 @@
       background: rgba(148, 163, 184, 0.08);
     }
 
+    .pod-list-header {
+      font-weight: 600;
+      color: var(--muted-text);
+      background: transparent;
+      border: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+
     .empty-state {
       padding: var(--spacing-lg);
       text-align: center;
@@ -1231,6 +1238,10 @@
       if (!page1.ownership.metrics.podList.length) {
         podList.appendChild(renderEmptyState("Select a leader to view POD ownership details."));
       } else {
+        const header = document.createElement("div");
+        header.className = "pod-list-item pod-list-header";
+        header.innerHTML = "<div>POD Number</div><div>POD Name</div><div>POD Tier</div>";
+        podList.appendChild(header);
         page1.ownership.metrics.podList.forEach((pod) => {
           const item = document.createElement("div");
           item.className = "pod-list-item";
