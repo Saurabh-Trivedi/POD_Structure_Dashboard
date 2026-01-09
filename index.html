@@ -673,6 +673,9 @@
         leadershipRoleCounts[role] = new Set();
       });
 
+      const leadershipColumns = getLeadershipColumns(columnMap);
+      const hasLeadershipColumns = Object.values(leadershipColumns).some(Boolean);
+
       const ownershipMap = buildOwnershipMap(rawData, columnMap);
 
       rawData.forEach((row) => {
@@ -716,13 +719,21 @@
           }
         }
 
-        const leaderName = getValue(row, columnMap.resourceName) || getValue(row, columnMap.leader);
-        if (leaderName) {
-          Object.entries(CONFIG.leadershipRoleFilters).forEach(([roleLabel, patterns]) => {
-            if (patterns.some((pattern) => roleValue.includes(pattern))) {
-              leadershipRoleCounts[roleLabel].add(leaderName);
-            }
+        if (hasLeadershipColumns) {
+          Object.entries(leadershipColumns).forEach(([roleLabel, header]) => {
+            splitNames(getValue(row, header)).forEach((name) => {
+              leadershipRoleCounts[roleLabel].add(name);
+            });
           });
+        } else {
+          const leaderName = getValue(row, columnMap.resourceName) || getValue(row, columnMap.leader);
+          if (leaderName) {
+            Object.entries(CONFIG.leadershipRoleFilters).forEach(([roleLabel, patterns]) => {
+              if (patterns.some((pattern) => roleValue.includes(pattern))) {
+                leadershipRoleCounts[roleLabel].add(leaderName);
+              }
+            });
+          }
         }
       });
 
@@ -841,6 +852,8 @@
       const leadershipIssues = [];
       const podStructureMismatches = [];
       const rollIssues = [];
+      const leadershipColumns = getLeadershipColumns(columnMap);
+      const hasLeadershipColumns = Object.values(leadershipColumns).some(Boolean);
 
       Object.entries(resourceGroups).forEach(([resourceName, rows]) => {
         if (!resourceName || resourceName === "(unnamed)") {
@@ -867,8 +880,10 @@
       });
 
       rawData.forEach((row) => {
-        const leader = normalizeValue(getValue(row, columnMap.leader));
-        if (!leader || leader === "tbh" || leader === "tbm" || leader === "tbd") {
+        const leaderValues = hasLeadershipColumns
+          ? Object.values(leadershipColumns).flatMap((header) => splitNames(getValue(row, header)))
+          : [normalizeValue(getValue(row, columnMap.leader))].filter(Boolean);
+        if (!leaderValues.length) {
           const pod = getValue(row, columnMap.podName) || "(unassigned)";
           const role = getValue(row, columnMap.role) || "role";
           leadershipIssues.push(`${pod} — ${role} has missing leadership assignment`);
@@ -908,19 +923,34 @@
       };
     }
 
+    function normalizeHeader(header) {
+      return String(header || "")
+        .toLowerCase()
+        .replace(/["']/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
     function mapColumns(headers) {
+      const normalized = headers.map((item) => ({ raw: item, normalized: normalizeHeader(item) }));
       const lookup = (patterns) => {
-        const header = headers.find((item) => patterns.some((pattern) => item.toLowerCase().includes(pattern)));
-        return header || "";
+        const normalizedPatterns = patterns.map((pattern) => normalizeHeader(pattern));
+        const match = normalized.find((item) => normalizedPatterns.some((pattern) => item.normalized.includes(pattern)));
+        return match ? match.raw : "";
       };
       return {
         podNumber: lookup(["pod number", "pod id", "pod #"]),
         podName: lookup(["pod name", "pod"]),
         podTier: lookup(["tier"]),
-        leader: lookup(["leader", "lead", "owner"]),
+        leader: lookup(["leader", "owner", "pod lead"]),
         resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
         role: lookup(["role", "position", "title", "leadership"]),
-        rollStatus: lookup(["roll", "status", "on/off"])
+        rollStatus: lookup(["roll", "status", "on/off"]),
+        pmoSeniorLead: lookup(["pmo senior lead", "pmo sr lead", "senior pmo lead"]),
+        principalArchitect: lookup(["principal architect", "principal arch"]),
+        technicalArchitect: lookup(["technical architect", "tech architect"]),
+        pmoLead: lookup(["pmo lead"]),
+        qaLead: lookup(["qa lead", "qa leads", "quality lead"])
       };
     }
 
@@ -931,6 +961,27 @@
 
     function normalizeValue(value) {
       return String(value || "").trim().toLowerCase();
+    }
+
+    function splitNames(value) {
+      return String(value || "")
+        .split(/[,/;]+/)
+        .map((name) => name.trim())
+        .filter((name) => {
+          if (!name) return false;
+          const normalized = normalizeValue(name);
+          return !normalized.includes("tbh") && !normalized.includes("tbd") && !normalized.includes("to be hired");
+        });
+    }
+
+    function getLeadershipColumns(columnMap) {
+      return {
+        "PMO Senior Lead": columnMap.pmoSeniorLead,
+        "PMO Lead": columnMap.pmoLead,
+        "Principal Architect": columnMap.principalArchitect,
+        "Technical Architect": columnMap.technicalArchitect,
+        "QA Leads": columnMap.qaLead
+      };
     }
 
     function groupBy(rows, keyFn) {
@@ -959,7 +1010,21 @@
         }
       });
 
+      const leadershipColumns = getLeadershipColumns(columnMap);
+      const hasLeadershipColumns = Object.values(leadershipColumns).some(Boolean);
+
       rawData.forEach((row) => {
+        if (hasLeadershipColumns) {
+          Object.entries(leadershipColumns).forEach(([roleLabel, header]) => {
+            if (!roles[roleLabel]) return;
+            splitNames(getValue(row, header)).forEach((name) => {
+              addOwnershipRecord(roles.All, name, row, columnMap);
+              addOwnershipRecord(roles[roleLabel], name, row, columnMap);
+            });
+          });
+          return;
+        }
+
         const leaderName = getValue(row, columnMap.resourceName) || getValue(row, columnMap.leader);
         if (!leaderName) return;
 
