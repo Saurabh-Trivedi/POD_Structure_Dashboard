@@ -58,17 +58,46 @@
 
     .upload-panel {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: var(--spacing-sm);
       font-size: var(--font-md);
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: var(--spacing-sm) var(--spacing-md);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     }
 
     .upload-panel input[type="file"] {
-      background: var(--surface-color);
+      background: var(--surface-alt);
       color: var(--text-color);
       border: 1px solid var(--border-color);
       padding: var(--spacing-xs);
       border-radius: 8px;
+    }
+
+    .upload-panel button {
+      background: var(--primary-color);
+      border: none;
+      color: white;
+      padding: var(--spacing-xs) var(--spacing-md);
+      border-radius: 999px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .upload-panel button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    }
+
+    .upload-panel button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
     }
 
     nav {
