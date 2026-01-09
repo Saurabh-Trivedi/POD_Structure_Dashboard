@@ -299,6 +299,7 @@
 
     .governance-grid {
       display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: var(--spacing-md);
     }
 
@@ -317,6 +318,46 @@
     .governance-list {
       display: grid;
       gap: var(--spacing-sm);
+    }
+
+    .governance-summary {
+      display: grid;
+      gap: var(--spacing-md);
+    }
+
+    .pod-health-grid {
+      display: grid;
+      gap: var(--spacing-sm);
+    }
+
+    .pod-health-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: 10px;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .pod-health-item strong {
+      font-size: var(--font-sm);
+    }
+
+    .pod-health-item span {
+      font-size: var(--font-xs);
+      color: var(--muted-text);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: var(--font-xs);
+      font-weight: 600;
+      background: rgba(37, 99, 235, 0.12);
+      color: var(--primary-color);
     }
 
     .bar-group {
@@ -907,6 +948,7 @@
       const podGroups = groupBy(rawData, (row) => getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "(unassigned)");
       const leadershipColumns = getLeadershipColumns(columnMap);
       const missingColumns = [];
+      const podIssueMap = {};
 
       const requireColumns = (label, keys) => {
         const missing = keys.filter((key) => !columnMap[key]);
@@ -988,6 +1030,35 @@
         return "";
       };
 
+      const leadershipOrder = [
+        { label: "PMO Senior Lead", header: leadershipColumns["PMO Senior Lead"] },
+        { label: "Principal Architect", header: leadershipColumns["Principal Architect"] },
+        { label: "Technical Architect", header: leadershipColumns["Technical Architect"] },
+        { label: "PMO Lead", header: leadershipColumns["PMO Lead"] },
+        { label: "QA Lead", header: leadershipColumns["QA Leads"] }
+      ];
+
+      const getPodKey = (row) => getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "(unassigned)";
+
+      const ensurePodIssue = (row) => {
+        const podKey = getPodKey(row);
+        if (!podIssueMap[podKey]) {
+          const podName = getValue(row, columnMap.podName) || "(unassigned)";
+          const podNumber = getValue(row, columnMap.podNumber) || "--";
+          const leaderEntry = leadershipOrder
+            .map((entry) => splitNames(getValue(row, entry.header)))
+            .find((names) => names.length);
+          podIssueMap[podKey] = {
+            podKey,
+            podNumber,
+            podName,
+            leader: leaderEntry ? leaderEntry[0] : "--",
+            issueCount: 0
+          };
+        }
+        return podIssueMap[podKey];
+      };
+
       Object.values(podGroups).forEach((rows) => {
         const podNumber = getValue(rows[0], columnMap.podNumber) || "--";
         const podName = getValue(rows[0], columnMap.podName) || "(unassigned)";
@@ -1039,6 +1110,8 @@
             tier: tierKey,
             reasons
           });
+          const issuePod = ensurePodIssue(rows[0]);
+          issuePod.issueCount += reasons.length;
         }
       });
 
@@ -1059,6 +1132,8 @@
           const names = splitNames(value);
           if (!names.length) {
             leadershipIssues[check.key].push({ pod: podLabel, reason: `${check.label} is missing` });
+            const issuePod = ensurePodIssue(rows[0]);
+            issuePod.issueCount += 1;
           }
         });
       });
@@ -1068,7 +1143,7 @@
         if (!resourceName || resourceName === "(unnamed)") return;
         const uniquePods = new Map();
         rows.forEach((row) => {
-          const pod = getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "--";
+          const pod = getPodKey(row) || "--";
           const role = getValue(row, columnMap.role) || "--";
           if (!uniquePods.has(pod)) {
             uniquePods.set(pod, role);
@@ -1078,6 +1153,18 @@
           duplicates.confirmed.push({
             name: resourceName,
             entries: Array.from(uniquePods.entries()).map(([pod, role]) => ({ pod, role }))
+          });
+          uniquePods.forEach((_, pod) => {
+            if (!podIssueMap[pod]) {
+              podIssueMap[pod] = {
+                podKey: pod,
+                podNumber: pod === "(unassigned)" ? "--" : pod,
+                podName: pod,
+                leader: "--",
+                issueCount: 0
+              };
+            }
+            podIssueMap[pod].issueCount += 1;
           });
         }
       });
@@ -1106,6 +1193,18 @@
             nameVariants: Array.from(nameSet),
             pods: Array.from(pods)
           });
+          pods.forEach((pod) => {
+            if (!podIssueMap[pod]) {
+              podIssueMap[pod] = {
+                podKey: pod,
+                podNumber: pod === "(unassigned)" ? "--" : pod,
+                podName: pod,
+                leader: "--",
+                issueCount: 0
+              };
+            }
+            podIssueMap[pod].issueCount += 1;
+          });
         }
       });
 
@@ -1122,18 +1221,32 @@
         const resource = getValue(row, columnMap.resourceName) || "--";
         if ((roleType === "sdm" || roleType === "pmo") && rollKey !== "on") {
           onOffIssues.push({ pod, role: roleLabel, resource, reason: `${roleType.toUpperCase()} must be On-Roll` });
+          const issuePod = ensurePodIssue(row);
+          issuePod.issueCount += 1;
         }
         if (roleType === "qa" && tierKey === "8 member" && rollKey !== "off") {
           onOffIssues.push({ pod, role: roleLabel, resource, reason: "QA must be Off-Roll for 8 Member POD" });
+          const issuePod = ensurePodIssue(row);
+          issuePod.issueCount += 1;
         }
       });
+
+      const podIssueSummary = Object.values(podIssueMap).sort((a, b) => b.issueCount - a.issueCount);
+      const podIssueBuckets = {
+        critical: podIssueSummary.filter((pod) => pod.issueCount >= 5),
+        significant: podIssueSummary.filter((pod) => pod.issueCount >= 3 && pod.issueCount <= 4),
+        improvement: podIssueSummary.filter((pod) => pod.issueCount >= 1 && pod.issueCount <= 2),
+        perfect: podIssueSummary.filter((pod) => pod.issueCount === 0)
+      };
 
       return {
         structureMismatch,
         leadershipIssues,
         duplicates,
         onOffIssues,
-        missingColumns
+        missingColumns,
+        podIssueSummary,
+        podIssueBuckets
       };
     }
 
@@ -1519,7 +1632,8 @@
         renderStructureMismatchSection(page3.structureMismatch),
         renderLeadershipIssuesSection(page3.leadershipIssues),
         renderDuplicatesSection(page3.duplicates),
-        renderOnOffIssuesSection(page3.onOffIssues)
+        renderOnOffIssuesSection(page3.onOffIssues),
+        renderPodHealthSection(page3.podIssueBuckets)
       );
 
       container.appendChild(grid);
@@ -1818,6 +1932,65 @@
       }
 
       section.appendChild(list);
+      return section;
+    }
+
+    function renderPodHealthSection(buckets) {
+      const section = document.createElement("div");
+      section.className = "card";
+      const heading = document.createElement("h3");
+      heading.className = "section-title";
+      heading.textContent = "POD Health Categories";
+      section.appendChild(heading);
+
+      const summary = document.createElement("div");
+      summary.className = "governance-summary";
+
+      const categories = [
+        { key: "critical", label: "Needs Significant Improvement", badge: "≥ 5 issues" },
+        { key: "significant", label: "Needs Improvement", badge: "3-4 issues" },
+        { key: "improvement", label: "Minor Issues", badge: "1-2 issues" },
+        { key: "perfect", label: "Perfect", badge: "0 issues" }
+      ];
+
+      categories.forEach((category) => {
+        const block = document.createElement("div");
+        block.className = "governance-item";
+        const titleRow = document.createElement("div");
+        titleRow.style.display = "flex";
+        titleRow.style.justifyContent = "space-between";
+        titleRow.style.alignItems = "center";
+        const label = document.createElement("strong");
+        label.textContent = category.label;
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = category.badge;
+        titleRow.append(label, badge);
+
+        const list = document.createElement("div");
+        list.className = "pod-health-grid";
+
+        const items = buckets[category.key] || [];
+        if (!items.length) {
+          list.appendChild(renderEmptyState("No pods in this category."));
+        } else {
+          items.forEach((pod) => {
+            const item = document.createElement("div");
+            item.className = "pod-health-item";
+            const name = document.createElement("strong");
+            name.textContent = `${pod.podNumber} — ${pod.podName}`;
+            const meta = document.createElement("span");
+            meta.textContent = `Leader: ${pod.leader} · Issues: ${pod.issueCount}`;
+            item.append(name, meta);
+            list.appendChild(item);
+          });
+        }
+
+        block.append(titleRow, list);
+        summary.appendChild(block);
+      });
+
+      section.appendChild(summary);
       return section;
     }
 
