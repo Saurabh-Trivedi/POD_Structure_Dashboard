@@ -314,6 +314,11 @@
       padding-left: 18px;
     }
 
+    .governance-list {
+      display: grid;
+      gap: var(--spacing-sm);
+    }
+
     .bar-group {
       display: grid;
       gap: var(--spacing-sm);
@@ -389,6 +394,15 @@
       color: var(--muted-text);
       background: transparent;
       border: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+
+    .error-banner {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #b91c1c;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: 12px;
+      font-size: var(--font-sm);
     }
 
     .empty-state {
@@ -890,22 +904,181 @@
 
     function derivePage3(headers, rawData) {
       const columnMap = mapColumns(headers);
-      const podGroups = groupBy(rawData, (row) => getValue(row, columnMap.podName) || "(unassigned)");
-      const resourceGroups = groupBy(rawData, (row) => normalizeValue(getValue(row, columnMap.resourceName)) || "(unnamed)");
-      const duplicateConfirmed = [];
-      const duplicatePossible = [];
-      const leadershipIssues = [];
-      const podStructureMismatches = [];
-      const rollIssues = [];
+      const podGroups = groupBy(rawData, (row) => getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "(unassigned)");
       const leadershipColumns = getLeadershipColumns(columnMap);
-      const hasLeadershipColumns = Object.values(leadershipColumns).some(Boolean);
+      const missingColumns = [];
 
-      Object.entries(resourceGroups).forEach(([resourceName, rows]) => {
-        if (!resourceName || resourceName === "(unnamed)") {
+      const requireColumns = (label, keys) => {
+        const missing = keys.filter((key) => !columnMap[key]);
+        if (missing.length) {
+          missingColumns.push(`${label}: missing ${missing.join(", ")}`);
+        }
+      };
+
+      requireColumns("POD Structure", ["podNumber", "podName", "podTier", "role", "rollStatus"]);
+      requireColumns("Duplicates", ["resourceName", "podNumber", "role"]);
+      requireColumns("On/Off Roll", ["podTier", "role", "rollStatus"]);
+      const missingLeadership = Object.entries(leadershipColumns)
+        .filter(([, header]) => !header)
+        .map(([label]) => label);
+      if (missingLeadership.length === Object.keys(leadershipColumns).length) {
+        missingColumns.push("Leadership Assignments: missing leadership columns");
+      } else if (missingLeadership.length) {
+        missingColumns.push(`Leadership Assignments: missing ${missingLeadership.join(", ")}`);
+      }
+
+      const structureMismatch = [];
+      const leadershipIssues = {
+        pmoSenior: [],
+        principal: [],
+        technical: [],
+        pmoLead: [],
+        qaLead: []
+      };
+      const duplicates = {
+        confirmed: [],
+        possible: []
+      };
+      const onOffIssues = [];
+
+      const expectedStructures = {
+        "12 member": [
+          { role: "sdm", roll: "on", count: 1 },
+          { role: "dev", roll: "on", count: 2 },
+          { role: "dev", roll: "off", count: 5 },
+          { role: "pmo", roll: "on", count: 2 },
+          { role: "qa", roll: "on", count: 1 },
+          { role: "qa", roll: "off", count: 1 }
+        ],
+        "8 member": [
+          { role: "sdm", roll: "on", count: 1 },
+          { role: "dev", roll: "on", count: 1 },
+          { role: "dev", roll: "off", count: 4 },
+          { role: "pmo", roll: "on", count: 1 },
+          { role: "qa", roll: "off", count: 1 }
+        ],
+        "tech pod": [
+          { role: "sdm", roll: "on", count: 1 },
+          { role: "dev", roll: "on", count: 1 },
+          { role: "dev", roll: "off", count: 4 },
+          { role: "pmo", roll: "on", count: 1 }
+        ]
+      };
+
+      const getTierKey = (tierValue) => {
+        if (!tierValue) return "";
+        if (tierValue.includes("12")) return "12 member";
+        if (tierValue.includes("8")) return "8 member";
+        if (tierValue.includes("tech")) return "tech pod";
+        return "";
+      };
+
+      const getRollKey = (rollValue) => {
+        if (rollValue.includes("off")) return "off";
+        if (rollValue.includes("on")) return "on";
+        return "";
+      };
+
+      const roleTypeFromTitle = (roleValue) => {
+        if (!roleValue) return "";
+        if (roleValue.includes("sdm") || roleValue.includes("service delivery")) return "sdm";
+        if (roleValue.includes("pmo")) return "pmo";
+        if (roleValue.includes("qa") || roleValue.includes("quality")) return "qa";
+        if (roleValue.includes("dev") || roleValue.includes("developer") || roleValue.includes("engineer")) return "dev";
+        return "";
+      };
+
+      Object.values(podGroups).forEach((rows) => {
+        const podNumber = getValue(rows[0], columnMap.podNumber) || "--";
+        const podName = getValue(rows[0], columnMap.podName) || "(unassigned)";
+        const tierValue = normalizeValue(getValue(rows[0], columnMap.podTier));
+        const tierKey = getTierKey(tierValue);
+        const expectations = expectedStructures[tierKey] || [];
+        if (!expectations.length) {
           return;
         }
-        if (rows.length > 1) {
-          duplicateConfirmed.push(`${resourceName} (${rows.length} records)`);
+
+        const actualCounts = {};
+        rows.forEach((row) => {
+          const roleValue = normalizeValue(getValue(row, columnMap.role));
+          const rollValue = normalizeValue(getValue(row, columnMap.rollStatus));
+          const roleType = roleTypeFromTitle(roleValue);
+          const rollKey = getRollKey(rollValue);
+          if (!roleType || !rollKey) return;
+          const countKey = `${roleType}:${rollKey}`;
+          actualCounts[countKey] = (actualCounts[countKey] || 0) + 1;
+        });
+
+        const reasons = [];
+        const expectedKeys = new Set();
+        expectations.forEach((expectation) => {
+          const key = `${expectation.role}:${expectation.roll}`;
+          expectedKeys.add(key);
+          const actual = actualCounts[key] || 0;
+          if (actual < expectation.count) {
+            reasons.push(`Expected ${expectation.count} ${expectation.roll.toUpperCase()} ${expectation.role.toUpperCase()}, found ${actual}`);
+          }
+          if (actual > expectation.count) {
+            reasons.push(
+              `Expected ${expectation.count} ${expectation.roll.toUpperCase()} ${expectation.role.toUpperCase()}, found ${actual} (exceeds)`
+            );
+          }
+        });
+
+        Object.entries(actualCounts).forEach(([key, count]) => {
+          if (!expectedKeys.has(key) && count > 0) {
+            const [roleLabel, rollLabel] = key.split(":");
+            reasons.push(`Unexpected ${rollLabel.toUpperCase()} ${roleLabel.toUpperCase()} count ${count}`);
+          }
+        });
+
+        if (reasons.length) {
+          structureMismatch.push({
+            pod: podNumber,
+            podName,
+            tier: tierKey,
+            reasons
+          });
+        }
+      });
+
+      Object.values(podGroups).forEach((rows) => {
+        const podNumber = getValue(rows[0], columnMap.podNumber) || "--";
+        const podName = getValue(rows[0], columnMap.podName) || "(unassigned)";
+        const podLabel = `${podNumber} — ${podName}`;
+        const checks = [
+          { key: "pmoSenior", label: "PMO Senior Lead", header: leadershipColumns["PMO Senior Lead"] },
+          { key: "principal", label: "Principal Architect", header: leadershipColumns["Principal Architect"] },
+          { key: "technical", label: "Technical Architect", header: leadershipColumns["Technical Architect"] },
+          { key: "pmoLead", label: "PMO Lead", header: leadershipColumns["PMO Lead"] },
+          { key: "qaLead", label: "QA Lead", header: leadershipColumns["QA Leads"] }
+        ];
+        checks.forEach((check) => {
+          if (!check.header) return;
+          const value = getValue(rows[0], check.header);
+          const names = splitNames(value);
+          if (!names.length) {
+            leadershipIssues[check.key].push({ pod: podLabel, reason: `${check.label} is missing` });
+          }
+        });
+      });
+
+      const resourceGroups = groupBy(rawData, (row) => normalizeValue(getValue(row, columnMap.resourceName)) || "(unnamed)");
+      Object.entries(resourceGroups).forEach(([resourceName, rows]) => {
+        if (!resourceName || resourceName === "(unnamed)") return;
+        const uniquePods = new Map();
+        rows.forEach((row) => {
+          const pod = getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "--";
+          const role = getValue(row, columnMap.role) || "--";
+          if (!uniquePods.has(pod)) {
+            uniquePods.set(pod, role);
+          }
+        });
+        if (uniquePods.size > 1) {
+          duplicates.confirmed.push({
+            name: resourceName,
+            entries: Array.from(uniquePods.entries()).map(([pod, role]) => ({ pod, role }))
+          });
         }
       });
 
@@ -918,53 +1091,49 @@
         normalizedNames[normalized] = normalizedNames[normalized] || new Set();
         normalizedNames[normalized].add(rawName);
       });
-      Object.values(normalizedNames).forEach((nameSet) => {
+      Object.entries(normalizedNames).forEach(([normalized, nameSet]) => {
         if (nameSet.size > 1) {
-          duplicatePossible.push(Array.from(nameSet).join(" / "));
+          const pods = new Set();
+          rawData.forEach((row) => {
+            const rawName = getValue(row, columnMap.resourceName);
+            if (!rawName) return;
+            const compare = rawName.toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (compare !== normalized) return;
+            const pod = getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "--";
+            pods.add(pod);
+          });
+          duplicates.possible.push({
+            nameVariants: Array.from(nameSet),
+            pods: Array.from(pods)
+          });
         }
       });
 
       rawData.forEach((row) => {
-        const leaderValues = hasLeadershipColumns
-          ? Object.values(leadershipColumns).flatMap((header) => splitNames(getValue(row, header)))
-          : [normalizeValue(getValue(row, columnMap.leader))].filter(Boolean);
-        if (!leaderValues.length) {
-          const pod = getValue(row, columnMap.podName) || "(unassigned)";
-          const role = getValue(row, columnMap.role) || "role";
-          leadershipIssues.push(`${pod} — ${role} has missing leadership assignment`);
-        }
-      });
+        const tierKey = getTierKey(normalizeValue(getValue(row, columnMap.podTier)));
+        const roleValue = normalizeValue(getValue(row, columnMap.role));
+        const rollValue = normalizeValue(getValue(row, columnMap.rollStatus));
+        const roleLabel = getValue(row, columnMap.role) || "--";
+        const roleType = roleTypeFromTitle(roleValue);
+        const rollKey = getRollKey(rollValue);
+        if (!tierKey || !roleType || !rollKey) return;
 
-      Object.entries(podGroups).forEach(([podName, rows]) => {
-        const tier = normalizeValue(getValue(rows[0], columnMap.podTier));
-        const expectations = CONFIG.tierRoleExpectations[tier] || [];
-        if (!expectations.length) {
-          return;
+        const pod = getValue(row, columnMap.podNumber) || getValue(row, columnMap.podName) || "--";
+        const resource = getValue(row, columnMap.resourceName) || "--";
+        if ((roleType === "sdm" || roleType === "pmo") && rollKey !== "on") {
+          onOffIssues.push({ pod, role: roleLabel, resource, reason: `${roleType.toUpperCase()} must be On-Roll` });
         }
-        const roles = rows.map((row) => normalizeValue(getValue(row, columnMap.role)));
-        expectations.forEach((expectedRole) => {
-          if (!roles.some((role) => role.includes(expectedRole))) {
-            podStructureMismatches.push(`${podName} (${tier}) missing ${expectedRole}`);
-          }
-        });
-      });
-
-      rawData.forEach((row) => {
-        const roll = normalizeValue(getValue(row, columnMap.rollStatus));
-        const role = normalizeValue(getValue(row, columnMap.role));
-        if (!roll) return;
-        if (roll.includes("off") && CONFIG.leadershipRoles.some((leadRole) => role.includes(leadRole))) {
-          const pod = getValue(row, columnMap.podName) || "(unassigned)";
-          rollIssues.push(`${pod} — ${role} marked Off-Roll`);
+        if (roleType === "qa" && tierKey === "8 member" && rollKey !== "off") {
+          onOffIssues.push({ pod, role: roleLabel, resource, reason: "QA must be Off-Roll for 8 Member POD" });
         }
       });
 
       return {
-        podStructureMismatches,
+        structureMismatch,
         leadershipIssues,
-        duplicateConfirmed,
-        duplicatePossible,
-        rollIssues
+        duplicates,
+        onOffIssues,
+        missingColumns
       };
     }
 
@@ -1339,12 +1508,18 @@
       const grid = document.createElement("div");
       grid.className = "governance-grid";
 
+      if (page3.missingColumns && page3.missingColumns.length) {
+        const banner = document.createElement("div");
+        banner.className = "error-banner";
+        banner.textContent = `Missing columns detected: ${page3.missingColumns.join(" • ")}`;
+        container.appendChild(banner);
+      }
+
       grid.append(
-        renderGovernanceSection("POD Structure Mismatch", page3.podStructureMismatches),
-        renderGovernanceSection("Leadership Assignment Issues", page3.leadershipIssues),
-        renderGovernanceSection("Duplicate Resource Names — Confirmed", page3.duplicateConfirmed),
-        renderGovernanceSection("Duplicate Resource Names — Needs Verification", page3.duplicatePossible),
-        renderGovernanceSection("On-Roll / Off-Roll Inconsistencies", page3.rollIssues)
+        renderStructureMismatchSection(page3.structureMismatch),
+        renderLeadershipIssuesSection(page3.leadershipIssues),
+        renderDuplicatesSection(page3.duplicates),
+        renderOnOffIssuesSection(page3.onOffIssues)
       );
 
       container.appendChild(grid);
@@ -1477,25 +1652,164 @@
       return table;
     }
 
-    function renderGovernanceSection(title, items) {
+    function renderStructureMismatchSection(items) {
       const section = document.createElement("div");
-      section.className = "governance-item";
+      section.className = "card";
       const heading = document.createElement("h3");
       heading.className = "section-title";
-      heading.textContent = title;
+      heading.textContent = "POD Structure Mismatch";
       section.appendChild(heading);
 
+      const list = document.createElement("div");
+      list.className = "governance-list";
+
       if (!items.length) {
-        section.appendChild(renderEmptyState("No issues detected."));
-        return section;
+        list.appendChild(renderEmptyState("No issues found."));
+      } else {
+        items.forEach((item) => {
+          const block = document.createElement("div");
+          block.className = "governance-item";
+          const header = document.createElement("strong");
+          header.textContent = `${item.pod} — ${item.podName} (${item.tier})`;
+          const reasons = document.createElement("ul");
+          item.reasons.forEach((reason) => {
+            const li = document.createElement("li");
+            li.textContent = reason;
+            reasons.appendChild(li);
+          });
+          block.append(header, reasons);
+          list.appendChild(block);
+        });
       }
 
-      const list = document.createElement("ul");
-      items.forEach((item) => {
+      section.appendChild(list);
+      return section;
+    }
+
+    function renderLeadershipIssuesSection(issues) {
+      const section = document.createElement("div");
+      section.className = "card";
+      const heading = document.createElement("h3");
+      heading.className = "section-title";
+      heading.textContent = "Leadership Assignment Issues";
+      section.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.className = "governance-list";
+
+      const groups = [
+        { label: "PMO Senior Lead", items: issues.pmoSenior || [] },
+        { label: "Principal Architect", items: issues.principal || [] },
+        { label: "Technical Architect", items: issues.technical || [] },
+        { label: "PMO Lead", items: issues.pmoLead || [] },
+        { label: "QA Lead", items: issues.qaLead || [] }
+      ];
+      const totalIssues = groups.reduce((sum, group) => sum + group.items.length, 0);
+
+      if (!totalIssues) {
+        list.appendChild(renderEmptyState("No issues found."));
+      } else {
+        groups.forEach((group) => {
+          const block = document.createElement("div");
+          block.className = "governance-item";
+          const header = document.createElement("strong");
+          header.textContent = group.label;
+          const groupList = document.createElement("ul");
+          if (!group.items.length) {
+            const li = document.createElement("li");
+            li.textContent = "No issues found.";
+            groupList.appendChild(li);
+          } else {
+            group.items.forEach((issue) => {
+              const li = document.createElement("li");
+              li.textContent = `${issue.pod} — ${issue.reason}`;
+              groupList.appendChild(li);
+            });
+          }
+          block.append(header, groupList);
+          list.appendChild(block);
+        });
+      }
+
+      section.appendChild(list);
+      return section;
+    }
+
+    function renderDuplicatesSection(duplicates) {
+      const section = document.createElement("div");
+      section.className = "card";
+      const heading = document.createElement("h3");
+      heading.className = "section-title";
+      heading.textContent = "Duplicate Resource Names";
+      section.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.className = "governance-list";
+
+      const confirmedBlock = document.createElement("div");
+      confirmedBlock.className = "governance-item";
+      const confirmedTitle = document.createElement("strong");
+      confirmedTitle.textContent = "Confirmed";
+      const confirmedList = document.createElement("ul");
+      if (!duplicates.confirmed.length) {
         const li = document.createElement("li");
-        li.textContent = item;
-        list.appendChild(li);
-      });
+        li.textContent = "No issues found.";
+        confirmedList.appendChild(li);
+      } else {
+        duplicates.confirmed.forEach((duplicate) => {
+          const li = document.createElement("li");
+          const entries = duplicate.entries.map((entry) => `${entry.pod} (${entry.role})`).join(", ");
+          li.textContent = `${duplicate.name}: ${entries}`;
+          confirmedList.appendChild(li);
+        });
+      }
+      confirmedBlock.append(confirmedTitle, confirmedList);
+
+      const possibleBlock = document.createElement("div");
+      possibleBlock.className = "governance-item";
+      const possibleTitle = document.createElement("strong");
+      possibleTitle.textContent = "Needs Verification";
+      const possibleList = document.createElement("ul");
+      if (!duplicates.possible.length) {
+        const li = document.createElement("li");
+        li.textContent = "No issues found.";
+        possibleList.appendChild(li);
+      } else {
+        duplicates.possible.forEach((duplicate) => {
+          const li = document.createElement("li");
+          const pods = duplicate.pods.length ? ` — Pods: ${duplicate.pods.join(", ")}` : "";
+          li.textContent = `${duplicate.nameVariants.join(" / ")}${pods}`;
+          possibleList.appendChild(li);
+        });
+      }
+      possibleBlock.append(possibleTitle, possibleList);
+
+      list.append(confirmedBlock, possibleBlock);
+      section.appendChild(list);
+      return section;
+    }
+
+    function renderOnOffIssuesSection(items) {
+      const section = document.createElement("div");
+      section.className = "card";
+      const heading = document.createElement("h3");
+      heading.className = "section-title";
+      heading.textContent = "On-Roll / Off-Roll Inconsistencies";
+      section.appendChild(heading);
+
+      const list = document.createElement("ul");
+      list.className = "governance-list";
+
+      if (!items.length) {
+        list.appendChild(renderEmptyState("No issues found."));
+      } else {
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = `${item.pod} — ${item.role} (${item.resource}): ${item.reason}`;
+          list.appendChild(li);
+        });
+      }
+
       section.appendChild(list);
       return section;
     }
