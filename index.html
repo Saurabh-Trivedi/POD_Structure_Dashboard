@@ -127,6 +127,10 @@
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
 
+    .grid.summary-row {
+      grid-template-columns: repeat(4, minmax(200px, 1fr));
+    }
+
     .chip {
       display: inline-flex;
       align-items: center;
@@ -156,6 +160,34 @@
       font-size: var(--font-lg);
       font-weight: 600;
     }
+
+    .chip-metrics {
+      display: grid;
+      gap: var(--spacing-xs);
+      margin-top: var(--spacing-xs);
+      width: 100%;
+    }
+
+    .chip-metric {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: var(--font-sm);
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .chip-tag {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted-text);
+    }
+
+    .chip-tag.on { color: #38bdf8; }
+    .chip-tag.off { color: #f59e0b; }
 
     .chip.primary { border-color: rgba(37, 99, 235, 0.6); }
     .chip.info { border-color: rgba(2, 132, 199, 0.6); }
@@ -375,11 +407,11 @@
     const CONFIG = {
       leadershipRoles: ["pod lead", "product owner", "tech lead", "engineering lead"],
       leadershipRoleFilters: {
-        "PMO Senior Lead": ["pmo senior lead"],
+        "PMO Senior Lead": ["pmo senior lead", "pmo sr lead", "senior pmo lead"],
         "PMO Lead": ["pmo lead"],
-        "Principal Architect": ["principal architect"],
-        "Technical Architect": ["technical architect"],
-        "QA Leads": ["qa lead", "quality lead"]
+        "Principal Architect": ["principal architect", "principal arch"],
+        "Technical Architect": ["technical architect", "tech architect"],
+        "QA Leads": ["qa lead", "quality lead", "qa manager"]
       },
       leadershipRoleOptions: ["All", "PMO Senior Lead", "Principal Architect", "Technical Architect", "PMO Lead"],
       tierRoleExpectations: {
@@ -618,7 +650,8 @@
 
     function derivePage1(headers, rawData, page1Ui) {
       const columnMap = mapColumns(headers);
-      const podSet = new Set();
+      const podKeySet = new Set();
+      const podMetaByKey = {};
       const tierCounts = {};
       const leaderCounts = {};
       const podMembersCount = {};
@@ -641,9 +674,16 @@
 
       rawData.forEach((row) => {
         const podName = getValue(row, columnMap.podName);
-        if (podName) {
-          podSet.add(podName);
-          podMembersCount[podName] = (podMembersCount[podName] || 0) + 1;
+        const podNumber = getValue(row, columnMap.podNumber);
+        const podKey = podNumber || podName || "(unassigned)";
+        if (podName || podNumber) {
+          podKeySet.add(podKey);
+          podMembersCount[podKey] = (podMembersCount[podKey] || 0) + 1;
+          podMetaByKey[podKey] = {
+            podNumber: podNumber || "--",
+            podName: podName || "--",
+            podTier: getValue(row, columnMap.podTier) || "--"
+          };
         }
 
         const tier = normalizeValue(getValue(row, columnMap.podTier));
@@ -674,11 +714,11 @@
           }
         }
 
-        const resourceName = getValue(row, columnMap.resourceName);
-        if (resourceName) {
+        const leaderName = getValue(row, columnMap.resourceName) || getValue(row, columnMap.leader);
+        if (leaderName) {
           Object.entries(CONFIG.leadershipRoleFilters).forEach(([roleLabel, patterns]) => {
             if (patterns.some((pattern) => roleValue.includes(pattern))) {
-              leadershipRoleCounts[roleLabel].add(resourceName);
+              leadershipRoleCounts[roleLabel].add(leaderName);
             }
           });
         }
@@ -693,10 +733,12 @@
         { twelve: 0, eight: 0 }
       );
 
-      const techPodCount = podSet.size
-        ? Array.from(podSet).filter((podName) => {
-            const podTier = normalizeValue(ownershipMap.podTierByPod[podName] || "");
-            return podName.toLowerCase().includes("tech") || podTier.includes("tech");
+      const techPodCount = podKeySet.size
+        ? Array.from(podKeySet).filter((podKey) => {
+            const podMeta = podMetaByKey[podKey] || {};
+            const podTier = normalizeValue(podMeta.podTier || "");
+            const podName = (podMeta.podName || "").toLowerCase();
+            return podName.includes("tech") || podTier.includes("tech");
           }).length
         : 0;
 
@@ -710,7 +752,7 @@
       const ownershipMetrics = buildOwnershipMetrics(selectedPods, podMembersCount);
 
       return {
-        totalPods: podSet.size,
+        totalPods: podKeySet.size,
         totalSeats: rawData.length,
         onRoll,
         offRoll,
@@ -864,7 +906,7 @@
         podTier: lookup(["tier"]),
         leader: lookup(["leader", "lead", "owner"]),
         resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
-        role: lookup(["role", "position", "title"]),
+        role: lookup(["role", "position", "title", "leadership"]),
         rollStatus: lookup(["roll", "status", "on/off"])
       };
     }
@@ -903,28 +945,23 @@
           roles[role] = {};
         }
       });
-      const podTierByPod = {};
 
       rawData.forEach((row) => {
-        const podName = getValue(row, columnMap.podName) || "(unassigned)";
-        const podTier = getValue(row, columnMap.podTier) || "";
-        podTierByPod[podName] = podTier;
-
-        const resourceName = getValue(row, columnMap.resourceName);
-        if (!resourceName) return;
+        const leaderName = getValue(row, columnMap.resourceName) || getValue(row, columnMap.leader);
+        if (!leaderName) return;
 
         const roleValue = normalizeValue(getValue(row, columnMap.role));
-        addOwnershipRecord(roles.All, resourceName, row, columnMap);
+        addOwnershipRecord(roles.All, leaderName, row, columnMap);
 
         Object.entries(CONFIG.leadershipRoleFilters).forEach(([roleLabel, patterns]) => {
           if (!roles[roleLabel]) return;
           if (patterns.some((pattern) => roleValue.includes(pattern))) {
-            addOwnershipRecord(roles[roleLabel], resourceName, row, columnMap);
+            addOwnershipRecord(roles[roleLabel], leaderName, row, columnMap);
           }
         });
       });
 
-      return { roles, podTierByPod };
+      return { roles };
     }
 
     function addOwnershipRecord(targetMap, leaderName, row, columnMap) {
@@ -934,9 +971,11 @@
       const podName = getValue(row, columnMap.podName) || "(unassigned)";
       const podNumber = getValue(row, columnMap.podNumber) || "--";
       const podTier = getValue(row, columnMap.podTier) || "--";
-      const existing = targetMap[leaderName].find((pod) => pod.podName === podName);
+      const podKey = podNumber !== "--" ? podNumber : podName;
+      const existing = targetMap[leaderName].find((pod) => pod.podKey === podKey);
       if (!existing) {
         targetMap[leaderName].push({
+          podKey,
           podNumber,
           podName,
           podTier
@@ -947,7 +986,7 @@
     function buildOwnershipMetrics(pods, podMembersCount) {
       const podList = pods.map((pod) => ({
         ...pod,
-        size: podMembersCount[pod.podName] || 0
+        size: podMembersCount[pod.podKey] || 0
       }));
       const podsOwned = podList.length;
       const pods12 = podList.filter((pod) => pod.size === 12).length;
@@ -992,25 +1031,22 @@
       kpiTitle.className = "section-title";
       kpiTitle.textContent = "Summary KPIs";
 
-      const kpiGrid = document.createElement("div");
-      kpiGrid.className = "grid kpi";
-      kpiGrid.append(
+      const kpiRowOne = document.createElement("div");
+      kpiRowOne.className = "grid kpi summary-row";
+      kpiRowOne.append(
         renderChip({ label: "Total PODs", value: page1.totalPods, variant: "primary", size: "lg", shape: "rounded", layout: "vertical" }),
         renderChip({ label: "Total Seats", value: page1.totalSeats, variant: "info", size: "lg", shape: "rounded", layout: "vertical" }),
-        renderChip({ label: "On-Roll Seats", value: page1.onRoll, variant: "primary", size: "md", shape: "pill", layout: "vertical" }),
-        renderChip({ label: "Off-Roll Seats", value: page1.offRoll, variant: "warning", size: "md", shape: "pill", layout: "vertical" }),
-        renderChip({ label: "SDM Seats", value: page1.roleBuckets.sdm.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
-        renderChip({ label: "SDM On Roll", value: page1.roleBuckets.sdm.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "SDM Off Roll", value: page1.roleBuckets.sdm.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "Developer Seats", value: page1.roleBuckets.developer.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
-        renderChip({ label: "Developer On Roll", value: page1.roleBuckets.developer.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "Developer Off Roll", value: page1.roleBuckets.developer.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "PMO Seats", value: page1.roleBuckets.pmo.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
-        renderChip({ label: "PMO On Roll", value: page1.roleBuckets.pmo.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "PMO Off Roll", value: page1.roleBuckets.pmo.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "QA Seats", value: page1.roleBuckets.qa.total, variant: "info", size: "md", shape: "rounded", layout: "horizontal" }),
-        renderChip({ label: "QA On Roll", value: page1.roleBuckets.qa.on, variant: "primary", size: "sm", shape: "pill", layout: "horizontal" }),
-        renderChip({ label: "QA Off Roll", value: page1.roleBuckets.qa.off, variant: "warning", size: "sm", shape: "pill", layout: "horizontal" })
+        renderChip({ label: "On-Roll Seats", value: page1.onRoll, variant: "info", size: "lg", shape: "rounded", layout: "vertical" }),
+        renderChip({ label: "Off-Roll Seats", value: page1.offRoll, variant: "warning", size: "lg", shape: "rounded", layout: "vertical" })
+      );
+
+      const kpiRowTwo = document.createElement("div");
+      kpiRowTwo.className = "grid kpi summary-row";
+      kpiRowTwo.append(
+        renderSeatChip({ label: "SDM Seats", bucket: page1.roleBuckets.sdm, variant: "info" }),
+        renderSeatChip({ label: "Developer Seats", bucket: page1.roleBuckets.developer, variant: "info" }),
+        renderSeatChip({ label: "PMO Seats", bucket: page1.roleBuckets.pmo, variant: "info" }),
+        renderSeatChip({ label: "QA Seats", bucket: page1.roleBuckets.qa, variant: "info" })
       );
 
       const tierSection = document.createElement("div");
@@ -1124,7 +1160,7 @@
       }
       ownershipSection.append(ownershipTitle, ownershipControls, ownershipGrid, podList);
 
-      card.append(kpiTitle, kpiGrid);
+      card.append(kpiTitle, kpiRowOne, kpiRowTwo);
       container.append(card, tierSection, leadershipChipsSection, podBarSection, ownershipSection);
     }
 
@@ -1203,6 +1239,41 @@
 
       chip.append(labelEl, valueEl);
       return chip;
+    }
+
+    function renderSeatChip({ label, bucket, variant = "info" }) {
+      const chip = document.createElement("div");
+      chip.className = `chip ${variant} md rounded vertical`;
+
+      const labelEl = document.createElement("div");
+      labelEl.className = "label";
+      labelEl.textContent = label;
+
+      const valueEl = document.createElement("div");
+      valueEl.className = "value";
+      valueEl.textContent = bucket.total;
+
+      const metrics = document.createElement("div");
+      metrics.className = "chip-metrics";
+      metrics.append(
+        renderChipMetric("On Roll", bucket.on, "on"),
+        renderChipMetric("Off Roll", bucket.off, "off")
+      );
+
+      chip.append(labelEl, valueEl, metrics);
+      return chip;
+    }
+
+    function renderChipMetric(label, value, variantClass) {
+      const row = document.createElement("div");
+      row.className = "chip-metric";
+      const tag = document.createElement("span");
+      tag.className = `chip-tag ${variantClass}`;
+      tag.textContent = label;
+      const val = document.createElement("span");
+      val.textContent = value;
+      row.append(tag, val);
+      return row;
     }
 
     function renderInputControl(label, type, value, onChange) {
