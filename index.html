@@ -307,6 +307,29 @@
       gap: var(--spacing-md);
     }
 
+    .governance-toolbar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .governance-toolbar label {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      font-size: var(--font-sm);
+      font-weight: 600;
+    }
+
+    .governance-toolbar select {
+      background: var(--surface-alt);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: var(--spacing-xs);
+      border-radius: 10px;
+    }
+
     .governance-item {
       background: var(--surface-alt);
       border: 1px solid var(--border-color);
@@ -322,6 +345,19 @@
     .governance-list {
       display: grid;
       gap: var(--spacing-sm);
+    }
+
+    .governance-list li {
+      line-height: 1.5;
+    }
+
+    .governance-list strong {
+      color: var(--primary-color);
+    }
+
+    .governance-note {
+      font-style: italic;
+      color: var(--muted-text);
     }
 
     .governance-summary {
@@ -488,6 +524,9 @@
       page1: {
         ownershipRole: "PMO Senior Lead",
         ownershipLeader: ""
+      },
+      page3: {
+        selectedPod: "All"
       },
       page2: {
         searchTerm: "",
@@ -1242,6 +1281,7 @@
         improvement: podIssueSummary.filter((pod) => pod.issueCount >= 1 && pod.issueCount <= 2),
         perfect: podIssueSummary.filter((pod) => pod.issueCount === 0)
       };
+      const podOptions = ["All", ...Object.keys(podGroups).sort()];
 
       return {
         structureMismatch,
@@ -1250,7 +1290,8 @@
         onOffIssues,
         missingColumns,
         podIssueSummary,
-        podIssueBuckets
+        podIssueBuckets,
+        podOptions
       };
     }
 
@@ -1607,6 +1648,45 @@
       }
 
       const page3 = state.derived.page3;
+      const selectedPod = state.ui.page3.selectedPod || "All";
+      const podOptions = page3.podOptions || ["All"];
+      const matchesPod = (value) => selectedPod === "All" || value === selectedPod;
+      const matchesPodLabel = (label) => selectedPod === "All" || String(label || "").startsWith(selectedPod);
+
+      const filteredStructure =
+        selectedPod === "All"
+          ? page3.structureMismatch
+          : page3.structureMismatch.filter((item) => matchesPod(item.pod) || matchesPod(item.podName));
+      const filteredLeadership = {
+        pmoSenior: page3.leadershipIssues.pmoSenior.filter((item) => matchesPodLabel(item.pod)),
+        principal: page3.leadershipIssues.principal.filter((item) => matchesPodLabel(item.pod)),
+        technical: page3.leadershipIssues.technical.filter((item) => matchesPodLabel(item.pod)),
+        pmoLead: page3.leadershipIssues.pmoLead.filter((item) => matchesPodLabel(item.pod)),
+        qaLead: page3.leadershipIssues.qaLead.filter((item) => matchesPodLabel(item.pod))
+      };
+      const filteredDuplicates = {
+        confirmed: page3.duplicates.confirmed.filter((dup) =>
+          selectedPod === "All" ? true : dup.entries.some((entry) => matchesPod(entry.pod))
+        ),
+        possible: page3.duplicates.possible.filter((dup) => (selectedPod === "All" ? true : dup.pods.some((pod) => matchesPod(pod))))
+      };
+      const filteredOnOff = selectedPod === "All" ? page3.onOffIssues : page3.onOffIssues.filter((item) => matchesPod(item.pod));
+      const filteredBuckets =
+        selectedPod === "All"
+          ? page3.podIssueBuckets
+          : {
+              critical: page3.podIssueBuckets.critical.filter((pod) => matchesPod(pod.podNumber) || matchesPod(pod.podName)),
+              significant: page3.podIssueBuckets.significant.filter((pod) => matchesPod(pod.podNumber) || matchesPod(pod.podName)),
+              improvement: page3.podIssueBuckets.improvement.filter((pod) => matchesPod(pod.podNumber) || matchesPod(pod.podName)),
+              perfect: page3.podIssueBuckets.perfect.filter((pod) => matchesPod(pod.podNumber) || matchesPod(pod.podName))
+            };
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "governance-toolbar";
+      toolbar.appendChild(
+        renderSelectControl("POD Filter", podOptions, selectedPod, (value) => updatePage3Ui({ selectedPod: value }))
+      );
+
       const grid = document.createElement("div");
       grid.className = "governance-grid";
 
@@ -1618,14 +1698,14 @@
       }
 
       grid.append(
-        renderStructureMismatchSection(page3.structureMismatch),
-        renderLeadershipIssuesSection(page3.leadershipIssues),
-        renderDuplicatesSection(page3.duplicates),
-        renderOnOffIssuesSection(page3.onOffIssues),
-        renderPodHealthSection(page3.podIssueBuckets)
+        renderStructureMismatchSection(filteredStructure),
+        renderLeadershipIssuesSection(filteredLeadership),
+        renderDuplicatesSection(filteredDuplicates),
+        renderOnOffIssuesSection(filteredOnOff),
+        renderPodHealthSection(filteredBuckets)
       );
 
-      container.appendChild(grid);
+      container.append(toolbar, grid);
     }
 
     // ============================
@@ -1763,6 +1843,10 @@
       heading.textContent = "POD Structure Mismatch";
       section.appendChild(heading);
 
+      const note = document.createElement("div");
+      note.className = "governance-note";
+      note.textContent = "Comparison against expected tier structure (role + on/off roll).";
+
       const list = document.createElement("div");
       list.className = "governance-list";
 
@@ -1785,7 +1869,7 @@
         });
       }
 
-      section.appendChild(list);
+      section.append(note, list);
       return section;
     }
 
@@ -1796,6 +1880,10 @@
       heading.className = "section-title";
       heading.textContent = "Leadership Assignment Issues";
       section.appendChild(heading);
+
+      const note = document.createElement("div");
+      note.className = "governance-note";
+      note.textContent = "Missing, blank, or TBH leadership fields by role.";
 
       const list = document.createElement("div");
       list.className = "governance-list";
@@ -1834,7 +1922,7 @@
         });
       }
 
-      section.appendChild(list);
+      section.append(note, list);
       return section;
     }
 
@@ -1845,6 +1933,10 @@
       heading.className = "section-title";
       heading.textContent = "Duplicate Resource Names";
       section.appendChild(heading);
+
+      const note = document.createElement("div");
+      note.className = "governance-note";
+      note.textContent = "Confirmed duplicates span multiple PODs; possible duplicates require verification.";
 
       const formatName = (name) =>
         String(name || "")
@@ -1895,7 +1987,7 @@
       possibleBlock.append(possibleTitle, possibleList);
 
       list.append(confirmedBlock, possibleBlock);
-      section.appendChild(list);
+      section.append(note, list);
       return section;
     }
 
@@ -1906,6 +1998,10 @@
       heading.className = "section-title";
       heading.textContent = "On-Roll / Off-Roll Inconsistencies";
       section.appendChild(heading);
+
+      const note = document.createElement("div");
+      note.className = "governance-note";
+      note.textContent = "Validates employment type against tier-specific expectations.";
 
       const list = document.createElement("ul");
       list.className = "governance-list";
@@ -1920,7 +2016,7 @@
         });
       }
 
-      section.appendChild(list);
+      section.append(note, list);
       return section;
     }
 
@@ -1931,6 +2027,10 @@
       heading.className = "section-title";
       heading.textContent = "POD Health Categories";
       section.appendChild(heading);
+
+      const note = document.createElement("div");
+      note.className = "governance-note";
+      note.textContent = "Categorized by total issue count per POD with leader reference.";
 
       const summary = document.createElement("div");
       summary.className = "governance-summary";
@@ -1979,7 +2079,7 @@
         summary.appendChild(block);
       });
 
-      section.appendChild(summary);
+      section.append(note, summary);
       return section;
     }
 
@@ -2049,6 +2149,18 @@
         derived: {
           ...APP_STATE.derived,
           page2: derivedPage2
+        }
+      };
+      renderApp(APP_STATE);
+    }
+
+    function updatePage3Ui(partial) {
+      const updatedPage3 = { ...APP_STATE.ui.page3, ...partial };
+      APP_STATE = {
+        ...APP_STATE,
+        ui: {
+          ...APP_STATE.ui,
+          page3: updatedPage3
         }
       };
       renderApp(APP_STATE);
