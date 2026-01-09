@@ -303,7 +303,7 @@
 
     .governance-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: 1fr;
       gap: var(--spacing-md);
     }
 
@@ -358,6 +358,51 @@
     .governance-note {
       font-style: italic;
       color: var(--muted-text);
+    }
+
+    .accent-warning {
+      border-left: 4px solid #f59e0b;
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    .accent-danger {
+      border-left: 4px solid #ef4444;
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    .accent-info {
+      border-left: 4px solid #3b82f6;
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .accent-success {
+      border-left: 4px solid #22c55e;
+      background: rgba(34, 197, 94, 0.08);
+    }
+
+    .accent-neutral {
+      border-left: 4px solid #64748b;
+      background: rgba(100, 116, 139, 0.08);
+    }
+
+    .badge.critical {
+      background: rgba(239, 68, 68, 0.15);
+      color: #b91c1c;
+    }
+
+    .badge.significant {
+      background: rgba(245, 158, 11, 0.15);
+      color: #b45309;
+    }
+
+    .badge.improvement {
+      background: rgba(59, 130, 246, 0.15);
+      color: #1d4ed8;
+    }
+
+    .badge.perfect {
+      background: rgba(34, 197, 94, 0.15);
+      color: #15803d;
     }
 
     .governance-summary {
@@ -1281,7 +1326,15 @@
         improvement: podIssueSummary.filter((pod) => pod.issueCount >= 1 && pod.issueCount <= 2),
         perfect: podIssueSummary.filter((pod) => pod.issueCount === 0)
       };
-      const podOptions = ["All", ...Object.keys(podGroups).sort()];
+      const podOptions = [
+        { value: "All", label: "All PODs" },
+        ...Object.values(podGroups)
+          .map((rows) => ({
+            value: getValue(rows[0], columnMap.podNumber) || getValue(rows[0], columnMap.podName) || "(unassigned)",
+            label: `${getValue(rows[0], columnMap.podNumber) || "--"} — ${getValue(rows[0], columnMap.podName) || "(unassigned)"}`
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+      ];
 
       return {
         structureMismatch,
@@ -1802,10 +1855,12 @@
       wrapper.textContent = label;
       const select = document.createElement("select");
       options.forEach((option) => {
+        const optionValue = typeof option === "object" ? option.value : option;
+        const optionLabel = typeof option === "object" ? option.label : option;
         const optionEl = document.createElement("option");
-        optionEl.value = option;
-        optionEl.textContent = option || "(none)";
-        optionEl.selected = option === selected;
+        optionEl.value = optionValue;
+        optionEl.textContent = optionLabel || "(none)";
+        optionEl.selected = optionValue === selected;
         select.appendChild(optionEl);
       });
       select.addEventListener("change", (event) => onChange(event.target.value));
@@ -1841,7 +1896,7 @@
 
     function renderStructureMismatchSection(items) {
       const section = document.createElement("div");
-      section.className = "card";
+      section.className = "card accent-warning";
       const heading = document.createElement("h3");
       heading.className = "section-title";
       heading.textContent = "POD Structure Mismatch";
@@ -1879,7 +1934,7 @@
 
     function renderLeadershipIssuesSection(issues) {
       const section = document.createElement("div");
-      section.className = "card";
+      section.className = "card accent-danger";
       const heading = document.createElement("h3");
       heading.className = "section-title";
       heading.textContent = "Leadership Assignment Issues";
@@ -1932,7 +1987,7 @@
 
     function renderDuplicatesSection(duplicates) {
       const section = document.createElement("div");
-      section.className = "card";
+      section.className = "card accent-info";
       const heading = document.createElement("h3");
       heading.className = "section-title";
       heading.textContent = "Duplicate Resource Names";
@@ -1997,7 +2052,7 @@
 
     function renderOnOffIssuesSection(items) {
       const section = document.createElement("div");
-      section.className = "card";
+      section.className = "card accent-neutral";
       const heading = document.createElement("h3");
       heading.className = "section-title";
       heading.textContent = "On-Roll / Off-Roll Inconsistencies";
@@ -2026,7 +2081,7 @@
 
     function renderPodHealthSection(buckets) {
       const section = document.createElement("div");
-      section.className = "card";
+      section.className = "card accent-success";
       const heading = document.createElement("h3");
       heading.className = "section-title";
       heading.textContent = "POD Health Categories";
@@ -2056,7 +2111,7 @@
         const label = document.createElement("strong");
         label.textContent = category.label;
         const badge = document.createElement("span");
-        badge.className = "badge";
+        badge.className = `badge ${category.key}`;
         badge.textContent = category.badge;
         titleRow.append(label, badge);
 
