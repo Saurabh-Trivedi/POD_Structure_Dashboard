@@ -1060,7 +1060,7 @@
         renderSeatChip({ label: "Developer Seats", bucket: page1.roleBuckets.developer, variant: "info" }),
         renderSeatChip({ label: "PMO Seats", bucket: page1.roleBuckets.pmo, variant: "info" }),
         renderSeatChip({ label: "QA Seats", bucket: page1.roleBuckets.qa, variant: "info" }),
-        renderChip({ label: "SDM + Developer + PMO + QA + Leaders", value: page1.teamSize, variant: "primary", size: "md", shape: "rounded", layout: "vertical" })
+        renderTeamSizeChip({ label: "Team Size", detail: "SDM + Developer + PMO + QA + Leaders", value: page1.teamSize })
       );
 
       const tierSection = document.createElement("div");
@@ -1252,6 +1252,26 @@
       valueEl.textContent = value;
 
       chip.append(labelEl, valueEl);
+      return chip;
+    }
+
+    function renderTeamSizeChip({ label, detail, value }) {
+      const chip = document.createElement("div");
+      chip.className = "chip primary md rounded vertical";
+
+      const labelEl = document.createElement("div");
+      labelEl.className = "label";
+      labelEl.textContent = label;
+
+      const detailEl = document.createElement("div");
+      detailEl.className = "muted";
+      detailEl.textContent = detail;
+
+      const valueEl = document.createElement("div");
+      valueEl.className = "value";
+      valueEl.textContent = value;
+
+      chip.append(labelEl, detailEl, valueEl);
       return chip;
     }
 
