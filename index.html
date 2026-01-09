@@ -361,48 +361,48 @@
     }
 
     .accent-warning {
-      border-left: 4px solid #f59e0b;
-      background: rgba(245, 158, 11, 0.08);
+      border-left: 4px solid #fbbf24;
+      background: rgba(251, 191, 36, 0.12);
     }
 
     .accent-danger {
-      border-left: 4px solid #ef4444;
-      background: rgba(239, 68, 68, 0.08);
+      border-left: 4px solid #f87171;
+      background: rgba(248, 113, 113, 0.12);
     }
 
     .accent-info {
-      border-left: 4px solid #3b82f6;
-      background: rgba(59, 130, 246, 0.08);
+      border-left: 4px solid #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
     }
 
     .accent-success {
-      border-left: 4px solid #22c55e;
-      background: rgba(34, 197, 94, 0.08);
+      border-left: 4px solid #4ade80;
+      background: rgba(74, 222, 128, 0.12);
     }
 
     .accent-neutral {
-      border-left: 4px solid #64748b;
-      background: rgba(100, 116, 139, 0.08);
+      border-left: 4px solid #94a3b8;
+      background: rgba(148, 163, 184, 0.12);
     }
 
     .badge.critical {
-      background: rgba(239, 68, 68, 0.15);
-      color: #b91c1c;
+      background: rgba(248, 113, 113, 0.2);
+      color: #991b1b;
     }
 
     .badge.significant {
-      background: rgba(245, 158, 11, 0.15);
-      color: #b45309;
+      background: rgba(251, 191, 36, 0.2);
+      color: #92400e;
     }
 
     .badge.improvement {
-      background: rgba(59, 130, 246, 0.15);
-      color: #1d4ed8;
+      background: rgba(56, 189, 248, 0.2);
+      color: #075985;
     }
 
     .badge.perfect {
-      background: rgba(34, 197, 94, 0.15);
-      color: #15803d;
+      background: rgba(74, 222, 128, 0.2);
+      color: #166534;
     }
 
     .governance-summary {
@@ -411,17 +411,20 @@
     }
 
     .pod-health-grid {
-      display: grid;
+      display: flex;
+      flex-wrap: wrap;
       gap: var(--spacing-sm);
     }
 
     .pod-health-item {
-      display: flex;
+      display: inline-flex;
       flex-direction: column;
       gap: 4px;
       padding: var(--spacing-xs) var(--spacing-sm);
       border-radius: 10px;
-      background: rgba(148, 163, 184, 0.08);
+      background: rgba(148, 163, 184, 0.12);
+      min-width: 220px;
+      max-width: 320px;
     }
 
     .pod-health-item strong {
