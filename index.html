@@ -652,9 +652,12 @@
       const columnMap = mapColumns(headers);
       const podKeySet = new Set();
       const podMetaByKey = {};
+      const podNumberSet = new Set();
+      const podMetaByNumber = {};
       const tierCounts = {};
       const leaderCounts = {};
       const podMembersCount = {};
+      const podMembersByNumber = {};
       let onRoll = 0;
       let offRoll = 0;
 
@@ -681,6 +684,15 @@
           podMembersCount[podKey] = (podMembersCount[podKey] || 0) + 1;
           podMetaByKey[podKey] = {
             podNumber: podNumber || "--",
+            podName: podName || "--",
+            podTier: getValue(row, columnMap.podTier) || "--"
+          };
+        }
+        if (podNumber) {
+          podNumberSet.add(podNumber);
+          podMembersByNumber[podNumber] = (podMembersByNumber[podNumber] || 0) + 1;
+          podMetaByNumber[podNumber] = {
+            podNumber,
             podName: podName || "--",
             podTier: getValue(row, columnMap.podTier) || "--"
           };
@@ -724,7 +736,7 @@
         }
       });
 
-      const podSizeCounts = Object.values(podMembersCount).reduce(
+      const podSizeCounts = Object.values(podMembersByNumber).reduce(
         (acc, size) => {
           if (size === 12) acc.twelve += 1;
           if (size === 8) acc.eight += 1;
@@ -733,9 +745,9 @@
         { twelve: 0, eight: 0 }
       );
 
-      const techPodCount = podKeySet.size
-        ? Array.from(podKeySet).filter((podKey) => {
-            const podMeta = podMetaByKey[podKey] || {};
+      const techPodCount = podNumberSet.size
+        ? Array.from(podNumberSet).filter((podNumber) => {
+            const podMeta = podMetaByNumber[podNumber] || {};
             const podTier = normalizeValue(podMeta.podTier || "");
             const podName = (podMeta.podName || "").toLowerCase();
             return podName.includes("tech") || podTier.includes("tech");
