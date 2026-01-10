@@ -644,6 +644,11 @@
       border: 1px dashed rgba(148, 163, 184, 0.4);
     }
 
+    .header-warning {
+      color: #b45309;
+      background: rgba(251, 191, 36, 0.12);
+    }
+
     .error-banner {
       background: rgba(239, 68, 68, 0.12);
       border: 1px solid rgba(239, 68, 68, 0.4);
@@ -717,6 +722,21 @@
 
     const CONFIG = {
       leadershipRoles: ["pod lead", "product owner", "tech lead", "engineering lead"],
+      expectedColumns: {
+        podNumber: "# POD",
+        podName: "POD Name",
+        podTier: "POD Tier",
+        resourceName: "Resource Name",
+        role: "Role Title",
+        rollStatus: "ON-Roll / Off-Roll",
+        band: "Band",
+        location: "Location",
+        pmoSeniorLead: "PMO Senior Lead",
+        principalArchitect: "Principal Architect",
+        technicalArchitect: "Technical Architect",
+        pmoLead: "PMO Lead",
+        qaLead: "QA Lead"
+      },
       leadershipRoleFilters: {
         "PMO Senior Lead": ["pmo senior lead", "pmo sr lead", "senior pmo lead"],
         "PMO Lead": ["pmo lead"],
@@ -952,10 +972,28 @@
     }
 
     function computeDerivedState(headers, rawData, ui) {
+      const podStructure = derivePodStructure(headers, rawData);
       return {
-        page1: derivePage1(headers, rawData, ui.page1),
-        page2: derivePage2(headers, rawData, ui.page2),
-        page3: derivePage3(headers, rawData)
+        page1: derivePage1(podStructure.headers, podStructure.rows, ui.page1),
+        page2: derivePage2(podStructure.headers, podStructure.rows, ui.page2, podStructure.headerIssues),
+        page3: derivePage3(podStructure.headers, podStructure.rows)
+      };
+    }
+
+    function derivePodStructure(headers, rawData) {
+      const columnMap = mapColumns(headers);
+      const usedHeaders = new Set(Object.values(columnMap).filter(Boolean));
+      const missingHeaders = Object.entries(CONFIG.expectedColumns)
+        .filter(([key]) => !columnMap[key])
+        .map(([, label]) => label);
+      const extraHeaders = headers.filter((header) => !usedHeaders.has(header));
+      return {
+        headers,
+        rows: rawData,
+        headerIssues: {
+          missingHeaders,
+          extraHeaders
+        }
       };
     }
 
@@ -1183,7 +1221,7 @@
       };
     }
 
-    function derivePage2(headers, rawData, page2Ui) {
+    function derivePage2(headers, rawData, page2Ui, headerIssues) {
       let rows = [...rawData];
       const columnMap = mapColumns(headers);
       const searchTerm = page2Ui.searchTerm.toLowerCase();
@@ -1221,7 +1259,8 @@
         rows,
         headers,
         tierOptions,
-        rollOptions
+        rollOptions,
+        headerIssues
       };
     }
 
@@ -1909,8 +1948,21 @@
       controls.appendChild(renderSelectControl("Sort By", sortOptions, state.ui.page2.sortKey, (value) => updatePage2Ui({ sortKey: value })));
       controls.appendChild(renderSelectControl("Direction", ["asc", "desc"], state.ui.page2.sortDir, (value) => updatePage2Ui({ sortDir: value })));
 
+      if (page2.headerIssues?.missingHeaders?.length || page2.headerIssues?.extraHeaders?.length) {
+        const banner = document.createElement("div");
+        banner.className = "error-banner";
+        const missing = page2.headerIssues.missingHeaders?.length
+          ? `Missing headers: ${page2.headerIssues.missingHeaders.join(", ")}`
+          : "";
+        const extra = page2.headerIssues.extraHeaders?.length
+          ? `Extra headers: ${page2.headerIssues.extraHeaders.join(", ")}`
+          : "";
+        banner.textContent = [missing, extra].filter(Boolean).join(" • ");
+        card.appendChild(banner);
+      }
+
       card.appendChild(controls);
-      card.appendChild(renderTable(page2.headers, page2.rows));
+      card.appendChild(renderTable(page2.headers, page2.rows, page2.headerIssues?.extraHeaders || []));
 
       container.appendChild(card);
     }
@@ -2253,13 +2305,17 @@
       return wrapper;
     }
 
-    function renderTable(headers, rows) {
+    function renderTable(headers, rows, extraHeaders = []) {
       const table = document.createElement("table");
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
+      const extraHeaderSet = new Set(extraHeaders);
       headers.forEach((header) => {
         const th = document.createElement("th");
         th.textContent = header;
+        if (extraHeaderSet.has(header)) {
+          th.classList.add("header-warning");
+        }
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
