@@ -486,7 +486,7 @@
     .insights-grid {
       display: grid;
       gap: var(--spacing-md);
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     }
 
     .insight-chip {
@@ -501,10 +501,6 @@
 
     .insight-chip.band-matrix-chip {
       grid-column: span 1;
-    }
-
-    .insight-chip.location-chip {
-      max-width: 360px;
     }
 
     .insight-chip h4 {
@@ -2035,6 +2031,12 @@
         return chip;
       }
 
+      const preferredOrder = ["SDM", "Developer", "PMO", "QA"];
+      const orderedRoles = [
+        ...preferredOrder.filter((role) => roles.includes(role)),
+        ...roles.filter((role) => !preferredOrder.includes(role)).sort()
+      ];
+
       const wrapper = document.createElement("div");
       wrapper.className = "band-matrix-wrapper";
       const table = document.createElement("table");
@@ -2043,7 +2045,7 @@
       const bandHeader = document.createElement("th");
       bandHeader.textContent = "Band";
       headerRow.appendChild(bandHeader);
-      roles.forEach((role) => {
+      orderedRoles.forEach((role) => {
         const th = document.createElement("th");
         th.textContent = role;
         headerRow.appendChild(th);
@@ -2053,7 +2055,7 @@
       headerRow.appendChild(totalHeader);
       table.appendChild(headerRow);
 
-      const columnTotals = Object.fromEntries(roles.map((role) => [role, 0]));
+      const columnTotals = Object.fromEntries(orderedRoles.map((role) => [role, 0]));
       let grandTotal = 0;
 
       bands.forEach((band) => {
@@ -2062,7 +2064,7 @@
         bandCell.textContent = band;
         row.appendChild(bandCell);
         let rowTotal = 0;
-        roles.forEach((role) => {
+        orderedRoles.forEach((role) => {
           const cell = document.createElement("td");
           const value = counts?.[band]?.[role] || 0;
           cell.textContent = value;
@@ -2081,7 +2083,7 @@
       const totalsLabel = document.createElement("td");
       totalsLabel.textContent = "Total";
       totalsRow.appendChild(totalsLabel);
-      roles.forEach((role) => {
+      orderedRoles.forEach((role) => {
         const cell = document.createElement("td");
         cell.textContent = columnTotals[role];
         totalsRow.appendChild(cell);
