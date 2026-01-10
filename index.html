@@ -486,7 +486,7 @@
     .insights-grid {
       display: grid;
       gap: var(--spacing-md);
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
 
     .insight-chip {
@@ -500,11 +500,11 @@
     }
 
     .insight-chip.band-matrix-chip {
-      grid-column: span 2;
+      grid-column: span 1;
     }
 
     .insight-chip.location-chip {
-      max-width: 420px;
+      max-width: 360px;
     }
 
     .insight-chip h4 {
@@ -547,28 +547,6 @@
 
     .band-matrix tr:nth-child(even) td {
       background: rgba(148, 163, 184, 0.08);
-    }
-
-    .location-grid {
-      display: grid;
-      gap: var(--spacing-sm);
-    }
-
-    .location-panel {
-      background: var(--surface-alt);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: var(--spacing-sm);
-      display: grid;
-      gap: var(--spacing-xs);
-    }
-
-    .location-panel h5 {
-      margin: 0;
-      font-size: var(--font-sm);
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-      color: var(--muted-text);
     }
 
     .location-table {
@@ -1864,7 +1842,8 @@
       insightsGrid.className = "insights-grid";
       insightsGrid.append(
         renderBandMatrixChip(page1.insights),
-        renderLocationInsightsChip(page1.insights)
+        renderOnRollLocationChip(page1.insights),
+        renderOffRollLocationChip(page1.insights)
       );
       insightsSection.append(insightsTitle, insightsGrid);
 
@@ -2069,31 +2048,59 @@
         th.textContent = role;
         headerRow.appendChild(th);
       });
+      const totalHeader = document.createElement("th");
+      totalHeader.textContent = "Total";
+      headerRow.appendChild(totalHeader);
       table.appendChild(headerRow);
+
+      const columnTotals = Object.fromEntries(roles.map((role) => [role, 0]));
+      let grandTotal = 0;
 
       bands.forEach((band) => {
         const row = document.createElement("tr");
         const bandCell = document.createElement("td");
         bandCell.textContent = band;
         row.appendChild(bandCell);
+        let rowTotal = 0;
         roles.forEach((role) => {
           const cell = document.createElement("td");
-          cell.textContent = counts?.[band]?.[role] || 0;
+          const value = counts?.[band]?.[role] || 0;
+          cell.textContent = value;
+          rowTotal += value;
+          columnTotals[role] += value;
           row.appendChild(cell);
         });
+        const totalCell = document.createElement("td");
+        totalCell.textContent = rowTotal;
+        row.appendChild(totalCell);
+        grandTotal += rowTotal;
         table.appendChild(row);
       });
+
+      const totalsRow = document.createElement("tr");
+      const totalsLabel = document.createElement("td");
+      totalsLabel.textContent = "Total";
+      totalsRow.appendChild(totalsLabel);
+      roles.forEach((role) => {
+        const cell = document.createElement("td");
+        cell.textContent = columnTotals[role];
+        totalsRow.appendChild(cell);
+      });
+      const grandCell = document.createElement("td");
+      grandCell.textContent = grandTotal;
+      totalsRow.appendChild(grandCell);
+      table.appendChild(totalsRow);
 
       wrapper.appendChild(table);
       chip.appendChild(wrapper);
       return chip;
     }
 
-    function renderLocationInsightsChip(insights) {
+    function renderOnRollLocationChip(insights) {
       const chip = document.createElement("div");
       chip.className = "insight-chip location-chip";
       const title = document.createElement("h4");
-      title.textContent = "Location Insights";
+      title.textContent = "On-Roll (Pune / ODC)";
       chip.appendChild(title);
 
       if (!insights?.hasLocationColumn) {
@@ -2102,37 +2109,35 @@
       }
 
       const onRoll = insights.location?.onRoll || { pune: 0, odc: 0, other: 0 };
-      const offRoll = insights.location?.offRoll || [];
-
-      const grid = document.createElement("div");
-      grid.className = "location-grid";
-      const onRollBlock = document.createElement("div");
-      onRollBlock.className = "location-panel";
-      const onRollLabel = document.createElement("h5");
-      onRollLabel.textContent = "On-Roll (Pune / ODC)";
       const onRollTable = renderLocationTable([
         { label: "Pune", count: onRoll.pune },
         { label: "ODC", count: onRoll.odc },
         ...(onRoll.other ? [{ label: "Other", count: onRoll.other }] : [])
       ]);
-      onRollBlock.append(onRollLabel, onRollTable);
+      chip.appendChild(onRollTable);
+      return chip;
+    }
 
-      const offRollBlock = document.createElement("div");
-      offRollBlock.className = "location-panel";
-      const offRollLabel = document.createElement("h5");
-      offRollLabel.textContent = "Off-Roll (Unique by Location)";
+    function renderOffRollLocationChip(insights) {
+      const chip = document.createElement("div");
+      chip.className = "insight-chip location-chip";
+      const title = document.createElement("h4");
+      title.textContent = "Off-Roll (Unique by Location)";
+      chip.appendChild(title);
+
+      if (!insights?.hasLocationColumn) {
+        chip.appendChild(renderEmptyState("Location column not available in the upload."));
+        return chip;
+      }
+
+      const offRoll = insights.location?.offRoll || [];
       const offRollTable = renderLocationTable(
         offRoll.length ? offRoll.map((entry) => ({ label: entry.location, count: entry.count })) : []
       );
       if (!offRoll.length) {
         offRollTable.appendChild(renderEmptyState("No off-roll location data found."));
-      } else {
-        offRollTable.classList.remove("empty");
       }
-      offRollBlock.append(offRollLabel, offRollTable);
-
-      grid.append(onRollBlock, offRollBlock);
-      chip.appendChild(grid);
+      chip.appendChild(offRollTable);
       return chip;
     }
 
@@ -2150,15 +2155,24 @@
       countHeader.textContent = "Count";
       headerRow.append(locationHeader, countHeader);
       table.appendChild(headerRow);
+      let total = 0;
       rows.forEach((row) => {
         const tr = document.createElement("tr");
         const label = document.createElement("td");
         label.textContent = row.label;
         const count = document.createElement("td");
         count.textContent = row.count;
+        total += Number(row.count) || 0;
         tr.append(label, count);
         table.appendChild(tr);
       });
+      const totalRow = document.createElement("tr");
+      const totalLabel = document.createElement("td");
+      totalLabel.textContent = "Total";
+      const totalValue = document.createElement("td");
+      totalValue.textContent = total;
+      totalRow.append(totalLabel, totalValue);
+      table.appendChild(totalRow);
       return table;
     }
 
