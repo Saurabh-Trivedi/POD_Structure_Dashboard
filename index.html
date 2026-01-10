@@ -630,7 +630,7 @@
 
     .pod-list-item {
       display: grid;
-      grid-template-columns: 90px 1fr 120px;
+      grid-template-columns: 90px 1fr 1.2fr 140px;
       gap: var(--spacing-sm);
       padding: var(--spacing-xs) var(--spacing-sm);
       border-radius: 8px;
@@ -642,6 +642,11 @@
       color: var(--muted-text);
       background: transparent;
       border: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+
+    .pod-list-modules {
+      font-size: var(--font-xs);
+      color: var(--muted-text);
     }
 
     .header-warning {
@@ -723,19 +728,32 @@
     const CONFIG = {
       leadershipRoles: ["pod lead", "product owner", "tech lead", "engineering lead"],
       expectedColumns: {
+        serialNumber: "S.No",
         podNumber: "# POD",
         podName: "POD Name",
         podTier: "POD Tier",
         resourceName: "Resource Name",
         role: "Role Title",
+        rowTitle: "Row Title",
         rollStatus: "ON-Roll / Off-Roll",
         band: "Band",
         location: "Location",
+        azurePodName: "Azure POD Name",
         pmoSeniorLead: "PMO Senior Lead",
         principalArchitect: "Principal Architect",
         technicalArchitect: "Technical Architect",
         pmoLead: "PMO Lead",
-        qaLead: "QA Lead"
+        qaLead: "QA Lead",
+        module1: "Module1",
+        module2: "Module2",
+        module3: "Module3",
+        module4: "Module4",
+        module5: "Module5",
+        module6: "Module6",
+        module7: "Module7",
+        module8: "Module8",
+        module9: "Module9",
+        module10: "Module10"
       },
       leadershipRoleFilters: {
         "PMO Senior Lead": ["pmo senior lead", "pmo sr lead", "senior pmo lead"],
@@ -1018,6 +1036,7 @@
       const roleSet = new Set();
       const onRollLocations = { pune: 0, odc: 0, other: 0 };
       const offRollLocationSets = {};
+      const podModulesMap = {};
 
       const leadershipRoleCounts = {};
       Object.keys(CONFIG.leadershipRoleFilters).forEach((role) => {
@@ -1028,6 +1047,18 @@
       const hasLeadershipColumns = Object.values(leadershipColumns).some(Boolean);
       const hasBandColumn = Boolean(columnMap.band);
       const hasLocationColumn = Boolean(columnMap.location);
+      const moduleHeaders = [
+        columnMap.module1,
+        columnMap.module2,
+        columnMap.module3,
+        columnMap.module4,
+        columnMap.module5,
+        columnMap.module6,
+        columnMap.module7,
+        columnMap.module8,
+        columnMap.module9,
+        columnMap.module10
+      ].filter(Boolean);
 
       const ownershipMap = buildOwnershipMap(rawData, columnMap);
 
@@ -1064,6 +1095,7 @@
         const roleRaw = getValue(row, columnMap.role);
         const roleValue = normalizeValue(roleRaw);
         const roleBucketKey = getRoleBucket(roleValue);
+        const rowTitleValue = normalizeValue(getValue(row, columnMap.rowTitle) || roleRaw);
         if (roleBucketKey && roleBuckets[roleBucketKey]) {
           roleBuckets[roleBucketKey].total += 1;
           if (roll.includes("on")) {
@@ -1071,6 +1103,17 @@
           } else if (roll.includes("off")) {
             roleBuckets[roleBucketKey].off += 1;
           }
+        }
+        if (rowTitleValue.includes("sdm") && moduleHeaders.length && podKey) {
+          if (!podModulesMap[podKey]) {
+            podModulesMap[podKey] = new Set();
+          }
+          moduleHeaders.forEach((header) => {
+            const moduleValue = String(getValue(row, header) || "").trim();
+            if (moduleValue) {
+              podModulesMap[podKey].add(moduleValue);
+            }
+          });
         }
         const isLeaderRole = isLeadershipRole(roleValue);
         if (hasBandColumn && roll.includes("on") && !isLeaderRole) {
@@ -1171,7 +1214,10 @@
         ? page1Ui.ownershipLeader
         : leaderOptions[0] || "";
       const selectedPods = selectedLeader ? ownershipLeaders[selectedLeader] || [] : [];
-      const ownershipMetrics = buildOwnershipMetrics(selectedPods, podMembersCount);
+      const podModules = Object.fromEntries(
+        Object.entries(podModulesMap).map(([key, set]) => [key, Array.from(set).sort().join(", ")])
+      );
+      const ownershipMetrics = buildOwnershipMetrics(selectedPods, podMembersCount, podModules);
       const bandMatrix = {
         bands: Array.from(bandSet).sort(),
         roles: Array.from(roleSet).sort(),
@@ -1600,9 +1646,11 @@
         podNumber: lookup(["# pod", "pod #", "pod number", "pod no", "pod id"]),
         podName: lookup(["pod name"]),
         podTier: lookup(["tier"]),
+        serialNumber: lookup(["s.no", "sno", "serial"]),
         leader: lookup(["leader", "owner", "pod lead"]),
         resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
         role: lookup(["role", "position", "title", "leadership"]),
+        rowTitle: lookup(["row title", "row"]),
         rollStatus: lookup(["roll", "status", "on/off"]),
         pmoSeniorLead: lookup(["pmo senior lead", "pmo sr lead", "senior pmo lead"]),
         principalArchitect: lookup(["principal architect", "principal arch"]),
@@ -1610,7 +1658,18 @@
         pmoLead: lookup(["pmo lead"]),
         qaLead: lookup(["qa lead", "qa leads", "quality lead"]),
         band: lookup(["band", "grade", "job band"]),
-        location: lookup(["location", "base location", "site"])
+        location: lookup(["location", "base location", "site"]),
+        azurePodName: lookup(["azure pod name", "azure pod"]),
+        module1: lookup(["module1", "module 1"]),
+        module2: lookup(["module2", "module 2"]),
+        module3: lookup(["module3", "module 3"]),
+        module4: lookup(["module4", "module 4"]),
+        module5: lookup(["module5", "module 5"]),
+        module6: lookup(["module6", "module 6"]),
+        module7: lookup(["module7", "module 7"]),
+        module8: lookup(["module8", "module 8"]),
+        module9: lookup(["module9", "module 9"]),
+        module10: lookup(["module10", "module 10"])
       };
     }
 
@@ -1732,10 +1791,11 @@
       }
     }
 
-    function buildOwnershipMetrics(pods, podMembersCount) {
+    function buildOwnershipMetrics(pods, podMembersCount, podModules) {
       const podList = pods.map((pod) => ({
         ...pod,
-        size: podMembersCount[pod.podKey] || 0
+        size: podMembersCount[pod.podKey] || 0,
+        modules: podModules[pod.podKey] || "--"
       }));
       const podsOwned = podList.length;
       const pods12 = podList.filter((pod) => pod.size === 12).length;
@@ -1891,12 +1951,12 @@
       } else {
         const header = document.createElement("div");
         header.className = "pod-list-item pod-list-header";
-        header.innerHTML = "<div>POD Number</div><div>POD Name</div><div>POD Tier</div>";
+        header.innerHTML = "<div>POD Number</div><div>POD Name</div><div>Modules</div><div>POD Tier</div>";
         podList.appendChild(header);
         page1.ownership.metrics.podList.forEach((pod) => {
           const item = document.createElement("div");
           item.className = "pod-list-item";
-          item.innerHTML = `<div>${pod.podNumber}</div><div>${pod.podName}</div><div>${pod.podTier}</div>`;
+          item.innerHTML = `<div>${pod.podNumber}</div><div>${pod.podName}</div><div class="pod-list-modules">${pod.modules}</div><div>${pod.podTier}</div>`;
           podList.appendChild(item);
         });
       }
