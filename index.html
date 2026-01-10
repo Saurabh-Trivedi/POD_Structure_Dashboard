@@ -334,10 +334,15 @@
     }
 
     .governance-item {
-      background: var(--surface-alt);
+      background: transparent;
       border: 1px solid var(--border-color);
       border-radius: 12px;
       padding: var(--spacing-md);
+      display: inline-flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      width: fit-content;
+      max-width: 360px;
     }
 
     .governance-item ul {
@@ -346,12 +351,23 @@
     }
 
     .governance-list {
-      display: grid;
+      display: flex;
+      flex-wrap: wrap;
       gap: var(--spacing-sm);
+      list-style: none;
+      margin: 0;
+      padding: 0;
     }
 
     .governance-list li {
       line-height: 1.5;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      display: inline-flex;
+      align-items: flex-start;
+      max-width: 360px;
+      background: transparent;
     }
 
     .governance-list strong {
@@ -364,28 +380,48 @@
     }
 
     .accent-warning {
-      border-left: 4px solid #fbbf24;
-      background: rgba(251, 191, 36, 0.12);
+      border-left: 4px solid #f59e0b;
     }
 
     .accent-danger {
-      border-left: 4px solid #f87171;
-      background: rgba(248, 113, 113, 0.12);
+      border-left: 4px solid #ef4444;
     }
 
     .accent-info {
       border-left: 4px solid #38bdf8;
-      background: rgba(56, 189, 248, 0.12);
     }
 
     .accent-success {
-      border-left: 4px solid #4ade80;
-      background: rgba(74, 222, 128, 0.12);
+      border-left: 4px solid #22c55e;
     }
 
     .accent-neutral {
       border-left: 4px solid #94a3b8;
-      background: rgba(148, 163, 184, 0.12);
+    }
+
+    .accent-warning .section-title,
+    .accent-warning .governance-item strong {
+      color: #b45309;
+    }
+
+    .accent-danger .section-title,
+    .accent-danger .governance-item strong {
+      color: #b91c1c;
+    }
+
+    .accent-info .section-title,
+    .accent-info .governance-item strong {
+      color: #0369a1;
+    }
+
+    .accent-success .section-title,
+    .accent-success .governance-item strong {
+      color: #166534;
+    }
+
+    .accent-neutral .section-title,
+    .accent-neutral .governance-item strong {
+      color: #475569;
     }
 
     .badge.critical {
