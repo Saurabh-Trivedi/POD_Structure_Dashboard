@@ -663,6 +663,100 @@
       font-size: var(--font-sm);
     }
 
+    .pod-structure-toolbar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .pod-structure-toolbar label {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      font-size: var(--font-sm);
+      font-weight: 600;
+    }
+
+    .pod-structure-toolbar input,
+    .pod-structure-toolbar select {
+      background: var(--surface-alt);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: var(--spacing-xs);
+      border-radius: 10px;
+    }
+
+    .pod-structure-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--spacing-md);
+    }
+
+    .pod-card {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: var(--spacing-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+      box-shadow: var(--shadow);
+    }
+
+    .pod-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--spacing-sm);
+    }
+
+    .pod-card-header h4 {
+      margin: 0;
+      font-size: var(--font-md);
+    }
+
+    .pod-card-subtitle {
+      color: var(--muted-text);
+      font-size: var(--font-xs);
+    }
+
+    .pod-role-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.4);
+      padding-top: var(--spacing-xs);
+    }
+
+    .pod-role-title {
+      font-weight: 600;
+      font-size: var(--font-sm);
+      color: var(--primary-color);
+    }
+
+    .pod-member {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--spacing-xs);
+      font-size: var(--font-xs);
+      color: var(--text-color);
+    }
+
+    .pod-member-meta {
+      color: var(--muted-text);
+    }
+
+    .roll-on {
+      color: #15803d;
+      font-weight: 600;
+    }
+
+    .roll-off {
+      color: #b91c1c;
+      font-weight: 600;
+    }
+
     .empty-state {
       padding: var(--spacing-lg);
       text-align: center;
@@ -684,12 +778,14 @@
   <nav>
     <button data-page="page1" class="active">Summary</button>
     <button data-page="page3">POD Structure Governance</button>
-    <button data-page="page2">POD Structure</button>
+    <button data-page="page2">Excel Data</button>
+    <button data-page="page4">POD Structure</button>
   </nav>
   <main>
     <section id="page1" class="page active"></section>
     <section id="page2" class="page"></section>
     <section id="page3" class="page"></section>
+    <section id="page4" class="page"></section>
   </main>
 
   <script>
@@ -711,6 +807,10 @@
         sortDir: "asc",
         tierFilter: "All",
         rollFilter: "All"
+      },
+      page4: {
+        searchTerm: "",
+        locationFilter: "All"
       }
     };
 
@@ -1038,7 +1138,8 @@
       return {
         page1: derivePage1(podStructure.headers, podStructure.rows, ui.page1),
         page2: derivePage2(podStructure.headers, podStructure.rows, ui.page2, podStructure.headerIssues),
-        page3: derivePage3(podStructure.headers, podStructure.rows)
+        page3: derivePage3(podStructure.headers, podStructure.rows),
+        page4: derivePage4(podStructure.headers, podStructure.rows, ui.page4)
       };
     }
 
@@ -1676,6 +1777,103 @@
       };
     }
 
+    function derivePage4(headers, rawData, page4Ui) {
+      const columnMap = mapColumns(headers);
+      const podMap = {};
+      const locationsSet = new Set();
+
+      rawData.forEach((row) => {
+        const podNumber = getValue(row, columnMap.podNumber) || "--";
+        const podName = getValue(row, columnMap.podName) || "(unassigned)";
+        const podKey = podNumber !== "--" ? podNumber : podName;
+        if (!podMap[podKey]) {
+          podMap[podKey] = {
+            podKey,
+            podNumber,
+            podName,
+            podTier: getValue(row, columnMap.podTier) || "--",
+            leaders: {},
+            members: {
+              SDM: [],
+              "Technical Architect": [],
+              "Principal Architect": [],
+              "PMO Lead": [],
+              Developers: [],
+              QAs: []
+            },
+            locations: new Set()
+          };
+        }
+
+        const pod = podMap[podKey];
+        const location = getValue(row, columnMap.location);
+        if (location) {
+          pod.locations.add(location);
+          locationsSet.add(location);
+        }
+
+        const leadershipColumns = getLeadershipColumns(columnMap);
+        Object.entries(leadershipColumns).forEach(([roleLabel, header]) => {
+          if (!header) return;
+          const names = splitNames(getValue(row, header));
+          if (!names.length) return;
+          pod.leaders[roleLabel] = names[0];
+        });
+
+        const roleValue = normalizeValue(getValue(row, columnMap.role));
+        const roleLabel = getValue(row, columnMap.role) || "--";
+        const rollValue = normalizeValue(getValue(row, columnMap.rollStatus));
+        const resourceName = getValue(row, columnMap.resourceName) || "--";
+        const rollTag = rollValue.includes("off") ? "off" : rollValue.includes("on") ? "on" : "";
+        const member = {
+          name: resourceName,
+          role: roleLabel,
+          location: location || "--",
+          roll: rollTag
+        };
+
+        if (roleValue.includes("sdm")) {
+          pod.members.SDM.push(member);
+        } else if (roleValue.includes("technical architect")) {
+          pod.members["Technical Architect"].push(member);
+        } else if (roleValue.includes("principal architect")) {
+          pod.members["Principal Architect"].push(member);
+        } else if (roleValue.includes("pmo")) {
+          pod.members["PMO Lead"].push(member);
+        } else if (roleValue.includes("qa") || roleValue.includes("quality")) {
+          pod.members.QAs.push(member);
+        } else if (roleValue.includes("developer") || roleValue.includes("engineer") || roleValue.includes("dev")) {
+          pod.members.Developers.push(member);
+        }
+      });
+
+      const pods = Object.values(podMap)
+        .map((pod) => ({
+          ...pod,
+          locations: Array.from(pod.locations)
+        }))
+        .sort((a, b) => a.podNumber.localeCompare(b.podNumber));
+      const searchTerm = page4Ui.searchTerm.trim().toLowerCase();
+      const locationFilter = page4Ui.locationFilter;
+      const filteredPods = pods.filter((pod) => {
+        const matchesSearch =
+          !searchTerm ||
+          pod.podName.toLowerCase().includes(searchTerm) ||
+          pod.podNumber.toLowerCase().includes(searchTerm);
+        const matchesLocation =
+          locationFilter === "All" || pod.locations.some((loc) => loc.toLowerCase() === locationFilter.toLowerCase());
+        return matchesSearch && matchesLocation;
+      });
+
+      return {
+        pods: filteredPods,
+        podCount: pods.length,
+        locations: Array.from(locationsSet).sort(),
+        searchTerm: page4Ui.searchTerm,
+        locationFilter
+      };
+    }
+
     function normalizeHeader(header) {
       return String(header || "")
         .toLowerCase()
@@ -1871,6 +2069,7 @@
       renderPage1(state);
       renderPage2(state);
       renderPage3(state);
+      renderPage4(state);
     }
 
     function renderPage1(state) {
@@ -2147,6 +2346,48 @@
       container.append(toolbar, grid);
     }
 
+    function renderPage4(state) {
+      const container = document.getElementById("page4");
+      container.innerHTML = "";
+
+      if (!state.rawData.length) {
+        container.appendChild(renderEmptyState("Upload an Excel file to view POD Structure."));
+        return;
+      }
+
+      const page4 = state.derived.page4;
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "pod-structure-toolbar";
+      toolbar.appendChild(
+        renderInputControl("Search PODs", "text", page4.searchTerm, (value) => updatePage4Ui({ searchTerm: value }))
+      );
+      toolbar.appendChild(
+        renderSelectControl(
+          "Location",
+          ["All", ...page4.locations],
+          page4.locationFilter,
+          (value) => updatePage4Ui({ locationFilter: value })
+        )
+      );
+
+      const grid = document.createElement("div");
+      grid.className = "pod-structure-grid";
+
+      if (!page4.pods.length) {
+        grid.appendChild(renderEmptyState("No PODs match the current filters."));
+      } else {
+        page4.pods.forEach((pod) => {
+          grid.appendChild(renderPodCard(pod));
+        });
+      }
+
+      card.append(toolbar, grid);
+      container.appendChild(card);
+    }
+
     // ============================
     // UI Components
     // ============================
@@ -2386,6 +2627,89 @@
       return row;
     }
 
+    function renderPodCard(pod) {
+      const card = document.createElement("div");
+      card.className = "pod-card";
+
+      const header = document.createElement("div");
+      header.className = "pod-card-header";
+      const title = document.createElement("h4");
+      title.textContent = pod.podName;
+      const subtitle = document.createElement("div");
+      subtitle.className = "pod-card-subtitle";
+      subtitle.textContent = `${pod.podNumber} • ${pod.podTier}`;
+      header.append(title, subtitle);
+
+      const groups = [
+        { label: "SDM", items: pod.members.SDM },
+        { label: "Technical Architect", items: pod.members["Technical Architect"] },
+        { label: "PMO Lead", items: pod.members["PMO Lead"] },
+        { label: "Principal Architect", items: pod.members["Principal Architect"] },
+        { label: `Developers (${pod.members.Developers.length})`, items: pod.members.Developers },
+        { label: `QAs (${pod.members.QAs.length})`, items: pod.members.QAs }
+      ];
+
+      const leaderRoles = [
+        { label: "PMO Senior Lead", key: "PMO Senior Lead" },
+        { label: "Technical Architect", key: "Technical Architect" },
+        { label: "Principal Architect", key: "Principal Architect" },
+        { label: "PMO Lead", key: "PMO Lead" },
+        { label: "QA Lead", key: "QA Leads" }
+      ];
+
+      leaderRoles.forEach((role) => {
+        if (pod.leaders[role.key]) {
+          groups.unshift({
+            label: role.label,
+            items: [
+              {
+                name: pod.leaders[role.key],
+                location: "--",
+                roll: ""
+              }
+            ]
+          });
+        }
+      });
+
+      groups.forEach((group) => {
+        if (!group.items.length) return;
+        const block = document.createElement("div");
+        block.className = "pod-role-group";
+        const label = document.createElement("div");
+        label.className = "pod-role-title";
+        label.textContent = group.label;
+        block.appendChild(label);
+        group.items.forEach((member) => {
+          const row = document.createElement("div");
+          row.className = "pod-member";
+          const name = document.createElement("span");
+          name.textContent = member.name;
+          const meta = document.createElement("span");
+          meta.className = "pod-member-meta";
+          meta.textContent = member.location;
+          const roll = document.createElement("span");
+          if (member.roll === "on") {
+            roll.className = "roll-on";
+            roll.textContent = "On-Roll";
+          } else if (member.roll === "off") {
+            roll.className = "roll-off";
+            roll.textContent = "Off-Roll";
+          } else {
+            roll.textContent = "";
+          }
+          const metaGroup = document.createElement("span");
+          metaGroup.append(meta, roll);
+          row.append(name, metaGroup);
+          block.appendChild(row);
+        });
+        card.appendChild(block);
+      });
+
+      card.prepend(header);
+      return card;
+    }
+
     function renderInputControl(label, type, value, onChange) {
       const wrapper = document.createElement("label");
       wrapper.textContent = label;
@@ -2413,6 +2737,23 @@
       select.addEventListener("change", (event) => onChange(event.target.value));
       wrapper.appendChild(select);
       return wrapper;
+    }
+
+    function updatePage4Ui(partial) {
+      const updatedPage4 = { ...APP_STATE.ui.page4, ...partial };
+      const derivedPage4 = derivePage4(APP_STATE.headers, APP_STATE.rawData, updatedPage4);
+      APP_STATE = {
+        ...APP_STATE,
+        ui: {
+          ...APP_STATE.ui,
+          page4: updatedPage4
+        },
+        derived: {
+          ...APP_STATE.derived,
+          page4: derivedPage4
+        }
+      };
+      renderPage4(APP_STATE);
     }
 
     function renderTable(headers, rows, extraHeaders = []) {
