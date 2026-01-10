@@ -486,7 +486,7 @@
     .insights-grid {
       display: grid;
       gap: var(--spacing-md);
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     }
 
     .insight-chip {
@@ -499,9 +499,24 @@
       gap: var(--spacing-sm);
     }
 
+    .insight-chip.band-matrix-chip {
+      grid-column: span 2;
+    }
+
+    .insight-chip.location-chip {
+      max-width: 420px;
+    }
+
     .insight-chip h4 {
       margin: 0;
       font-size: var(--font-md);
+    }
+
+    .band-matrix-wrapper {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: var(--spacing-sm);
+      background: var(--surface-alt);
     }
 
     .band-matrix {
@@ -512,9 +527,15 @@
 
     .band-matrix th,
     .band-matrix td {
-      padding: 6px 8px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    .band-matrix td:first-child,
+    .band-matrix th:first-child {
       text-align: left;
+      font-weight: 600;
     }
 
     .band-matrix th {
@@ -522,6 +543,32 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.02em;
+    }
+
+    .band-matrix tr:nth-child(even) td {
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .location-grid {
+      display: grid;
+      gap: var(--spacing-sm);
+    }
+
+    .location-panel {
+      background: var(--surface-alt);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: var(--spacing-sm);
+      display: grid;
+      gap: var(--spacing-xs);
+    }
+
+    .location-panel h5 {
+      margin: 0;
+      font-size: var(--font-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: var(--muted-text);
     }
 
     .location-list {
@@ -1991,7 +2038,7 @@
 
     function renderBandMatrixChip(insights) {
       const chip = document.createElement("div");
-      chip.className = "insight-chip";
+      chip.className = "insight-chip band-matrix-chip";
       const title = document.createElement("h4");
       title.textContent = "Band vs Role (On-Roll)";
       chip.appendChild(title);
@@ -2007,6 +2054,8 @@
         return chip;
       }
 
+      const wrapper = document.createElement("div");
+      wrapper.className = "band-matrix-wrapper";
       const table = document.createElement("table");
       table.className = "band-matrix";
       const headerRow = document.createElement("tr");
@@ -2033,13 +2082,14 @@
         table.appendChild(row);
       });
 
-      chip.appendChild(table);
+      wrapper.appendChild(table);
+      chip.appendChild(wrapper);
       return chip;
     }
 
     function renderLocationInsightsChip(insights) {
       const chip = document.createElement("div");
-      chip.className = "insight-chip";
+      chip.className = "insight-chip location-chip";
       const title = document.createElement("h4");
       title.textContent = "Location Insights";
       chip.appendChild(title);
@@ -2052,9 +2102,11 @@
       const onRoll = insights.location?.onRoll || { pune: 0, odc: 0, other: 0 };
       const offRoll = insights.location?.offRoll || [];
 
+      const grid = document.createElement("div");
+      grid.className = "location-grid";
       const onRollBlock = document.createElement("div");
-      const onRollLabel = document.createElement("div");
-      onRollLabel.className = "muted";
+      onRollBlock.className = "location-panel";
+      const onRollLabel = document.createElement("h5");
       onRollLabel.textContent = "On-Roll (Pune / ODC)";
       const onRollList = document.createElement("div");
       onRollList.className = "location-list";
@@ -2068,8 +2120,8 @@
       onRollBlock.append(onRollLabel, onRollList);
 
       const offRollBlock = document.createElement("div");
-      const offRollLabel = document.createElement("div");
-      offRollLabel.className = "muted";
+      offRollBlock.className = "location-panel";
+      const offRollLabel = document.createElement("h5");
       offRollLabel.textContent = "Off-Roll (Unique by Location)";
       const offRollList = document.createElement("div");
       offRollList.className = "location-list";
@@ -2082,7 +2134,8 @@
       }
       offRollBlock.append(offRollLabel, offRollList);
 
-      chip.append(onRollBlock, offRollBlock);
+      grid.append(onRollBlock, offRollBlock);
+      chip.appendChild(grid);
       return chip;
     }
 
