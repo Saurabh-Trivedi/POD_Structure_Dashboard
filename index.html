@@ -571,22 +571,24 @@
       color: var(--muted-text);
     }
 
-    .location-list {
-      display: grid;
-      gap: 6px;
-      font-size: var(--font-md);
-      width: fit-content;
+    .location-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-sm);
     }
 
-    .location-row {
-      display: grid;
-      grid-template-columns: auto max-content;
-      column-gap: var(--spacing-sm);
-      align-items: center;
+    .location-table th,
+    .location-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
     }
 
-    .location-row span {
-      font-weight: 500;
+    .location-table th {
+      color: var(--muted-text);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
 
     .ownership-controls {
@@ -2108,46 +2110,56 @@
       onRollBlock.className = "location-panel";
       const onRollLabel = document.createElement("h5");
       onRollLabel.textContent = "On-Roll (Pune / ODC)";
-      const onRollList = document.createElement("div");
-      onRollList.className = "location-list";
-      onRollList.append(
-        buildLocationRow("Pune", onRoll.pune),
-        buildLocationRow("ODC", onRoll.odc)
-      );
-      if (onRoll.other) {
-        onRollList.appendChild(buildLocationRow("Other", onRoll.other));
-      }
-      onRollBlock.append(onRollLabel, onRollList);
+      const onRollTable = renderLocationTable([
+        { label: "Pune", count: onRoll.pune },
+        { label: "ODC", count: onRoll.odc },
+        ...(onRoll.other ? [{ label: "Other", count: onRoll.other }] : [])
+      ]);
+      onRollBlock.append(onRollLabel, onRollTable);
 
       const offRollBlock = document.createElement("div");
       offRollBlock.className = "location-panel";
       const offRollLabel = document.createElement("h5");
       offRollLabel.textContent = "Off-Roll (Unique by Location)";
-      const offRollList = document.createElement("div");
-      offRollList.className = "location-list";
+      const offRollTable = renderLocationTable(
+        offRoll.length ? offRoll.map((entry) => ({ label: entry.location, count: entry.count })) : []
+      );
       if (!offRoll.length) {
-        offRollList.appendChild(renderEmptyState("No off-roll location data found."));
+        offRollTable.appendChild(renderEmptyState("No off-roll location data found."));
       } else {
-        offRoll.forEach((entry) => {
-          offRollList.appendChild(buildLocationRow(entry.location, entry.count));
-        });
+        offRollTable.classList.remove("empty");
       }
-      offRollBlock.append(offRollLabel, offRollList);
+      offRollBlock.append(offRollLabel, offRollTable);
 
       grid.append(onRollBlock, offRollBlock);
       chip.appendChild(grid);
       return chip;
     }
 
-    function buildLocationRow(label, value) {
-      const row = document.createElement("div");
-      row.className = "location-row";
-      const name = document.createElement("span");
-      name.textContent = label;
-      const count = document.createElement("strong");
-      count.textContent = value;
-      row.append(name, count);
-      return row;
+    function renderLocationTable(rows) {
+      const table = document.createElement("table");
+      table.className = "location-table";
+      if (!rows.length) {
+        table.classList.add("empty");
+        return table;
+      }
+      const headerRow = document.createElement("tr");
+      const locationHeader = document.createElement("th");
+      locationHeader.textContent = "Location";
+      const countHeader = document.createElement("th");
+      countHeader.textContent = "Count";
+      headerRow.append(locationHeader, countHeader);
+      table.appendChild(headerRow);
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        const label = document.createElement("td");
+        label.textContent = row.label;
+        const count = document.createElement("td");
+        count.textContent = row.count;
+        tr.append(label, count);
+        table.appendChild(tr);
+      });
+      return table;
     }
 
     function renderChipMetric(label, value, variantClass) {
