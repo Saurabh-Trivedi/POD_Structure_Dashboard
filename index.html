@@ -1636,6 +1636,7 @@
       return String(header || "")
         .toLowerCase()
         .replace(/["']/g, "")
+        .replace(/[\r\n]+/g, " ")
         .replace(/\s+/g, " ")
         .trim();
     }
@@ -1655,7 +1656,7 @@
         leader: lookup(["leader", "owner", "pod lead"]),
         resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
         role: lookup(["role", "position", "title", "leadership"]),
-        rowTitle: lookup(["row title", "row"]),
+        rowTitle: lookup(["row title", "row", "role title"]),
         rollStatus: lookup(["roll", "status", "on/off"]),
         pmoSeniorLead: lookup(["pmo senior lead", "pmo sr lead", "senior pmo lead"]),
         principalArchitect: lookup(["principal architect", "principal arch"]),
