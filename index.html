@@ -816,10 +816,35 @@
     }
 
     function parseDelimited(text) {
-      const lines = text.split(/\r?\n/).filter(Boolean);
+      const normalizedText = collapseQuotedNewlines(text);
+      const lines = normalizedText.split(/\r?\n/).filter(Boolean);
       const delimiter = lines[0]?.includes("\t") ? "\t" : ",";
-      const rows = lines.map((line) => line.split(delimiter).map((cell) => cell.trim()));
+      const rows = lines.map((line) =>
+        line
+          .split(delimiter)
+          .map((cell) => cell.trim())
+          .map((cell) => cell.replace(/^"|"$/g, ""))
+      );
       return normalizeSheet(rows);
+    }
+
+    function collapseQuotedNewlines(text) {
+      let inQuotes = false;
+      let result = "";
+      for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+          result += char;
+          continue;
+        }
+        if ((char === "\n" || char === "\r") && inQuotes) {
+          result += " ";
+          continue;
+        }
+        result += char;
+      }
+      return result;
     }
 
     async function parseXlsx(buffer) {
