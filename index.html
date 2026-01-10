@@ -864,8 +864,9 @@
       if (!rows.length) {
         return { headers: [], rows: [] };
       }
-      const headers = rows[0].map((header) => header || "(blank)");
-      const dataRows = rows.slice(1).map((row) => {
+      const headerIndex = findHeaderRowIndex(rows);
+      const headers = (rows[headerIndex] || []).map((header) => header || "(blank)");
+      const dataRows = rows.slice(headerIndex + 1).map((row) => {
         const rowObj = {};
         headers.forEach((header, index) => {
           rowObj[header] = row[index] ?? "";
@@ -873,6 +874,24 @@
         return rowObj;
       });
       return { headers, rows: dataRows };
+    }
+
+    function findHeaderRowIndex(rows) {
+      const expectedTokens = Object.values(CONFIG.expectedColumns).map((label) => normalizeHeader(label));
+      let bestIndex = 0;
+      let bestScore = -1;
+      rows.forEach((row, index) => {
+        const normalizedCells = row.map((cell) => normalizeHeader(cell));
+        const nonEmptyCount = normalizedCells.filter(Boolean).length;
+        if (!nonEmptyCount) return;
+        const matchCount = normalizedCells.filter((cell) => expectedTokens.some((token) => cell.includes(token))).length;
+        const score = matchCount * 10 + nonEmptyCount;
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      });
+      return bestIndex;
     }
 
     function parseSharedStrings(xmlBytes) {
