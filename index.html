@@ -1002,7 +1002,12 @@
       const columnMap = mapColumns(headers);
       const usedHeaders = new Set(Object.values(columnMap).filter(Boolean));
       const missingHeaders = Object.entries(CONFIG.expectedColumns)
-        .filter(([key]) => !columnMap[key])
+        .filter(([key]) => {
+          if (key === "rowTitle" && columnMap.role) {
+            return false;
+          }
+          return !columnMap[key];
+        })
         .map(([, label]) => label);
       const extraHeaders = headers.filter((header) => !usedHeaders.has(header));
       return {
@@ -1646,7 +1651,7 @@
         podNumber: lookup(["# pod", "pod #", "pod number", "pod no", "pod id"]),
         podName: lookup(["pod name"]),
         podTier: lookup(["tier"]),
-        serialNumber: lookup(["s.no", "sno", "serial"]),
+        serialNumber: lookup(["s.no", "s no", "sno", "serial"]),
         leader: lookup(["leader", "owner", "pod lead"]),
         resourceName: lookup(["resource name", "resource", "member", "employee", "associate", "person"]),
         role: lookup(["role", "position", "title", "leadership"]),
