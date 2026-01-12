@@ -810,7 +810,8 @@
         rollFilter: "All"
       },
       page4: {
-        searchTerm: "",
+        filterRole: "POD Name",
+        filterValue: "All",
         locationFilter: "All"
       }
     };
@@ -1782,6 +1783,7 @@
       const columnMap = mapColumns(headers);
       const podMap = {};
       const locationsSet = new Set();
+      const leadershipColumns = getLeadershipColumns(columnMap);
 
       rawData.forEach((row) => {
         const podNumber = getValue(row, columnMap.podNumber) || "--";
@@ -1813,7 +1815,6 @@
           locationsSet.add(location);
         }
 
-        const leadershipColumns = getLeadershipColumns(columnMap);
         Object.entries(leadershipColumns).forEach(([roleLabel, header]) => {
           if (!header) return;
           const names = splitNames(getValue(row, header));
@@ -1854,27 +1855,41 @@
           locations: Array.from(pod.locations)
         }))
         .sort((a, b) => a.podNumber.localeCompare(b.podNumber));
-      const searchTerm = page4Ui.searchTerm.trim().toLowerCase();
+      const filterRole = page4Ui.filterRole;
+      const filterValue = page4Ui.filterValue;
       const locationFilter = page4Ui.locationFilter;
+      const roleOptions = [
+        { value: "POD Name", label: "POD Name" },
+        ...Object.keys(leadershipColumns).map((role) => ({
+          value: role,
+          label: role === "QA Leads" ? "QA Lead" : role
+        }))
+      ];
+      const valueOptions =
+        filterRole === "POD Name"
+          ? pods.map((pod) => pod.podName)
+          : pods.map((pod) => pod.leaders[filterRole]).filter(Boolean);
+      const filterValueOptions = ["All", ...Array.from(new Set(valueOptions)).sort((a, b) => a.localeCompare(b))];
       const filteredPods = pods.filter((pod) => {
-        const leaderValues = Object.values(pod.leaders)
-          .filter(Boolean)
-          .map((value) => value.toLowerCase());
-        const matchesSearch =
-          !searchTerm ||
-          pod.podName.toLowerCase().includes(searchTerm) ||
-          pod.podNumber.toLowerCase().includes(searchTerm) ||
-          leaderValues.some((value) => value.includes(searchTerm));
+        const matchesRoleFilter =
+          filterValue === "All"
+            ? true
+            : filterRole === "POD Name"
+              ? pod.podName === filterValue
+              : pod.leaders[filterRole] === filterValue;
         const matchesLocation =
           locationFilter === "All" || pod.locations.some((loc) => loc.toLowerCase() === locationFilter.toLowerCase());
-        return matchesSearch && matchesLocation;
+        return matchesRoleFilter && matchesLocation;
       });
 
       return {
         pods: filteredPods,
         podCount: pods.length,
         locations: Array.from(locationsSet).sort(),
-        searchTerm: page4Ui.searchTerm,
+        filterRole,
+        filterValue,
+        filterRoleOptions: roleOptions,
+        filterValueOptions,
         locationFilter
       };
     }
@@ -2367,7 +2382,14 @@
       const toolbar = document.createElement("div");
       toolbar.className = "pod-structure-toolbar";
       toolbar.appendChild(
-        renderInputControl("Search PODs", "text", page4.searchTerm, (value) => updatePage4Ui({ searchTerm: value }))
+        renderSelectControl("Filter By", page4.filterRoleOptions, page4.filterRole, (value) =>
+          updatePage4Ui({ filterRole: value, filterValue: "All" })
+        )
+      );
+      toolbar.appendChild(
+        renderSelectControl("Value", page4.filterValueOptions, page4.filterValue, (value) =>
+          updatePage4Ui({ filterValue: value })
+        )
       );
       toolbar.appendChild(
         renderSelectControl(
