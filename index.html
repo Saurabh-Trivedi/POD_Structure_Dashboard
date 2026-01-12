@@ -552,7 +552,8 @@
     .band-matrix {
       width: 100%;
       border-collapse: collapse;
-      font-size: var(--font-xs);
+      font-size: var(--font-sm);
+      color: var(--text-color);
     }
 
     .band-matrix th,
@@ -1856,10 +1857,14 @@
       const searchTerm = page4Ui.searchTerm.trim().toLowerCase();
       const locationFilter = page4Ui.locationFilter;
       const filteredPods = pods.filter((pod) => {
+        const leaderValues = Object.values(pod.leaders)
+          .filter(Boolean)
+          .map((value) => value.toLowerCase());
         const matchesSearch =
           !searchTerm ||
           pod.podName.toLowerCase().includes(searchTerm) ||
-          pod.podNumber.toLowerCase().includes(searchTerm);
+          pod.podNumber.toLowerCase().includes(searchTerm) ||
+          leaderValues.some((value) => value.includes(searchTerm));
         const matchesLocation =
           locationFilter === "All" || pod.locations.some((loc) => loc.toLowerCase() === locationFilter.toLowerCase());
         return matchesSearch && matchesLocation;
@@ -2648,29 +2653,6 @@
         { label: `Developers (${pod.members.Developers.length})`, items: pod.members.Developers },
         { label: `QAs (${pod.members.QAs.length})`, items: pod.members.QAs }
       ];
-
-      const leaderRoles = [
-        { label: "PMO Senior Lead", key: "PMO Senior Lead" },
-        { label: "Technical Architect", key: "Technical Architect" },
-        { label: "Principal Architect", key: "Principal Architect" },
-        { label: "PMO Lead", key: "PMO Lead" },
-        { label: "QA Lead", key: "QA Leads" }
-      ];
-
-      leaderRoles.forEach((role) => {
-        if (pod.leaders[role.key]) {
-          groups.unshift({
-            label: role.label,
-            items: [
-              {
-                name: pod.leaders[role.key],
-                location: "--",
-                roll: ""
-              }
-            ]
-          });
-        }
-      });
 
       groups.forEach((group) => {
         if (!group.items.length) return;
