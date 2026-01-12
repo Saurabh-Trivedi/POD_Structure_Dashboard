@@ -2669,20 +2669,13 @@
           name.textContent = member.name;
           const meta = document.createElement("span");
           meta.className = "pod-member-meta";
-          meta.textContent = member.location;
-          const roll = document.createElement("span");
           if (member.roll === "on") {
-            roll.className = "roll-on";
-            roll.textContent = "On-Roll";
+            meta.classList.add("roll-on");
           } else if (member.roll === "off") {
-            roll.className = "roll-off";
-            roll.textContent = "Off-Roll";
-          } else {
-            roll.textContent = "";
+            meta.classList.add("roll-off");
           }
-          const metaGroup = document.createElement("span");
-          metaGroup.append(meta, roll);
-          row.append(name, metaGroup);
+          meta.textContent = member.location;
+          row.append(name, meta);
           block.appendChild(row);
         });
         card.appendChild(block);
