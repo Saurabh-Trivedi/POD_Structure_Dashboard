@@ -811,8 +811,7 @@
       },
       page4: {
         filterRole: "POD Name",
-        filterValue: "All",
-        locationFilter: "All"
+        filterValue: "All"
       }
     };
 
@@ -1782,7 +1781,6 @@
     function derivePage4(headers, rawData, page4Ui) {
       const columnMap = mapColumns(headers);
       const podMap = {};
-      const locationsSet = new Set();
       const leadershipColumns = getLeadershipColumns(columnMap);
 
       rawData.forEach((row) => {
@@ -1812,7 +1810,6 @@
         const location = getValue(row, columnMap.location);
         if (location) {
           pod.locations.add(location);
-          locationsSet.add(location);
         }
 
         Object.entries(leadershipColumns).forEach(([roleLabel, header]) => {
@@ -1857,7 +1854,6 @@
         .sort((a, b) => a.podNumber.localeCompare(b.podNumber));
       const filterRole = page4Ui.filterRole;
       const filterValue = page4Ui.filterValue;
-      const locationFilter = page4Ui.locationFilter;
       const roleOptions = [
         { value: "POD Name", label: "POD Name" },
         ...Object.keys(leadershipColumns).map((role) => ({
@@ -1877,20 +1873,16 @@
             : filterRole === "POD Name"
               ? pod.podName === filterValue
               : pod.leaders[filterRole] === filterValue;
-        const matchesLocation =
-          locationFilter === "All" || pod.locations.some((loc) => loc.toLowerCase() === locationFilter.toLowerCase());
-        return matchesRoleFilter && matchesLocation;
+        return matchesRoleFilter;
       });
 
       return {
         pods: filteredPods,
         podCount: pods.length,
-        locations: Array.from(locationsSet).sort(),
         filterRole,
         filterValue,
         filterRoleOptions: roleOptions,
-        filterValueOptions,
-        locationFilter
+        filterValueOptions
       };
     }
 
@@ -2389,14 +2381,6 @@
       toolbar.appendChild(
         renderSelectControl("Value", page4.filterValueOptions, page4.filterValue, (value) =>
           updatePage4Ui({ filterValue: value })
-        )
-      );
-      toolbar.appendChild(
-        renderSelectControl(
-          "Location",
-          ["All", ...page4.locations],
-          page4.locationFilter,
-          (value) => updatePage4Ui({ locationFilter: value })
         )
       );
 
